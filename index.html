@@ -120,7 +120,7 @@ body{font-family:'Segoe UI',sans-serif;display:flex;flex-direction:column;height
         <div class="menu-item" onclick="exportData()">전선 데이터 내보내기</div>
         <div class="menu-item" onclick="importData()">전선 데이터 불러오기</div>
         <div class="menu-sep"></div>
-        <div class="menu-item" onclick="loadEnclosure()">외함 3D 불러오기 (STL/OBJ)<span>Ctrl+E</span></div>
+        <div class="menu-item" onclick="loadEnclosure()">3D 모델 불러오기 (STL/OBJ)<span>Ctrl+E</span></div>
     </div></div>
     <div class="menu-group"><div class="menu-trigger" onclick="toggleMenu('edit-menu')">편집</div><div class="menu-dropdown" id="edit-menu">
         <div class="menu-item" onclick="undo()">실행 취소<span>Ctrl+Z</span></div>
@@ -272,10 +272,10 @@ body{font-family:'Segoe UI',sans-serif;display:flex;flex-direction:column;height
             </div>
         </div>
         <div class="section" id="enc-section">
-            <h2 style="color:#4caf50;">외함 3D 모델</h2>
+            <h2 style="color:#4caf50;">3D 모델</h2>
             <div id="enc-list" style="display:flex;flex-direction:column;gap:2px;max-height:120px;overflow-y:auto;"></div>
             <div class="btn-row" style="margin-top:4px;">
-                <button class="rbtn" onclick="loadEnclosure()">+ 외함 추가</button>
+                <button class="rbtn" onclick="loadEnclosure()">+ 3D 모델 추가</button>
                 <button class="rbtn" id="enc-remove-btn" onclick="removeEnclosure()" style="color:#d32f2f;">제거</button>
             </div>
             <div id="enc-controls" style="display:none;margin-top:6px;">
@@ -283,7 +283,7 @@ body{font-family:'Segoe UI',sans-serif;display:flex;flex-direction:column;height
                 <div class="form-row"><label style="min-width:40px;">색상</label><input type="color" id="enc-color" value="#888888" class="color-input" oninput="onEncColor(this.value)"></div>
                 <div class="form-row"><label style="min-width:40px;">스케일</label><input type="number" id="enc-scale" value="1" min="0.001" step="0.1" onchange="onEncScale(this.value)" style="width:60px;"><select id="enc-unit" onchange="onEncUnitChange(this.value)" style="width:55px;font-size:10px;"><option value="mm">mm</option><option value="cm">cm</option><option value="inch">inch</option></select></div>
                 <div class="form-row"><label style="min-width:40px;">위치</label><input type="number" id="enc-pos-x" value="0" step="10" style="width:50px;" placeholder="X" onchange="onEncPosition()"><input type="number" id="enc-pos-y" value="0" step="10" style="width:50px;" placeholder="Y" onchange="onEncPosition()"><input type="number" id="enc-pos-z" value="0" step="10" style="width:50px;" placeholder="Z" onchange="onEncPosition()"></div>
-                <div class="form-row"><label style="min-width:40px;">회전</label><input type="number" id="enc-rot-x" value="0" step="15" style="width:50px;" placeholder="X" onchange="onEncRotation()"><input type="number" id="enc-rot-y" value="0" step="15" style="width:50px;" placeholder="Y" onchange="onEncRotation()"><input type="number" id="enc-rot-z" value="0" step="15" style="width:50px;" placeholder="Z" onchange="onEncRotation()"><span class="unit">deg</span></div>
+                <div class="form-row"><label style="min-width:40px;">회전</label><button class="rbtn" onclick="rotateEnc('x',90)" style="padding:2px 6px;">X+90</button><button class="rbtn" onclick="rotateEnc('y',90)" style="padding:2px 6px;">Y+90</button><button class="rbtn" onclick="rotateEnc('z',90)" style="padding:2px 6px;">Z+90</button></div>
                 <div class="btn-row" style="margin-top:4px;"><button class="rbtn" id="enc-wireframe-btn" onclick="toggleEncWireframe()">와이어프레임</button></div>
             </div>
         </div>
@@ -519,6 +519,24 @@ document.addEventListener('keydown', e => {
                 targets.forEach(bg=>{ bg.offX+=dx; bg.offY+=dy; });
             }
             drawPlan(); updateBg3D(); return;
+        }
+        // Alt+화살표: 선택된 3D 모델 이동 (Shift 추가 시 1mm)
+        if(e.altKey && !c && selectedEnclosureIdx>=0 && selectedEnclosureIdx<loadedEnclosures.length){
+            e.preventDefault();
+            const step=e.shiftKey?1:10;
+            let dx=0, dy=0;
+            if(e.key==='ArrowLeft') dx=-step; if(e.key==='ArrowRight') dx=step;
+            if(e.key==='ArrowUp') dy=-step; if(e.key==='ArrowDown') dy=step;
+            const move3D=unproject2D(dx, dy);
+            saveStateArrow();
+            const enc=loadedEnclosures[selectedEnclosureIdx];
+            enc.position.x+=move3D.x; enc.position.y+=move3D.y; enc.position.z+=move3D.z;
+            enc.mesh.position.set(enc.position.x, enc.position.y, enc.position.z);
+            document.getElementById('enc-pos-x').value=enc.position.x;
+            document.getElementById('enc-pos-y').value=enc.position.y;
+            document.getElementById('enc-pos-z').value=enc.position.z;
+            invalidateEncCache(enc); drawPlan();
+            return;
         }
         // 화살표 / Shift+화살표: 이동 모드에서 전선 이동
         if(moveMode && !c){
@@ -1552,6 +1570,9 @@ function drawPlan(){
         ctx.restore();
     });
 
+    // Enclosures 2D
+    drawEnclosures2D(ctx, scale, cx, cy, midX, midY);
+
     // Wires
     planScreenPts=[];
     wires.forEach(w=>{if(w.visible===false)return;const bd=allWireBuilds[w.id];if(!bd)return;const off=project2D(new THREE.Vector3(w.startPos.x,w.startPos.y,w.startPos.z));const pts=bd.nodes.map(n=>{const p=project2D(n.pos);return toScr({x:p.x+off.x,y:p.y+off.y});});const isSel=w.id===selectedWireId;const lw=Math.max(isSel?4:2,w.diameter*scale*0.15);
@@ -1885,7 +1906,7 @@ async function saveProject(){
             whiteTransparent: !!bg.whiteTransparent
         }));
     }
-    // 외함 데이터 저장 (arrayBuffer를 base64로)
+    // 3D 모델 데이터 저장 (arrayBuffer를 base64로)
     const encData=loadedEnclosures.map(enc=>{
         let ab64=null;
         if(enc.arrayBuffer && enc.arrayBuffer.byteLength < 5*1024*1024){
@@ -1994,7 +2015,7 @@ function loadProject(){
                         else{ renderWireList(); }
                         setPlanView(planView);
                         updateBgNav(); updateAll();
-                        // 외함 복원
+                        // 3D 모델 복원
                         clearAllEnclosures();
                         if(d.enclosures && d.enclosures.length){
                             d.enclosures.forEach(ed=>{
@@ -2007,7 +2028,8 @@ function loadProject(){
                                     const loader=new THREE.STLLoader();
                                     const geom=loader.parse(ab);
                                     geom.center();
-                                    const mat=new THREE.MeshPhongMaterial({color:ed.color||'#888888',transparent:true,opacity:ed.opacity!=null?ed.opacity:0.4,side:THREE.DoubleSide,depthWrite:false});
+                                    const restoreOp=ed.opacity!=null?ed.opacity:0.4;
+                                    const mat=new THREE.MeshPhongMaterial({color:ed.color||'#888888',transparent:restoreOp<1.0,opacity:restoreOp,side:THREE.DoubleSide,depthWrite:restoreOp>=1.0});
                                     const mesh=new THREE.Mesh(geom,mat);
                                     const s=ed.scale||1; mesh.scale.set(s,s,s);
                                     if(ed.position){mesh.position.set(ed.position.x||0,ed.position.y||0,ed.position.z||0);}
@@ -2016,7 +2038,7 @@ function loadProject(){
                                     enclosureGroup.add(mesh);
                                     loadedEnclosures.push({name:ed.name,mesh,visible:ed.visible!==false,opacity:ed.opacity!=null?ed.opacity:0.4,color:ed.color||'#888888',scale:s,position:{x:ed.position?.x||0,y:ed.position?.y||0,z:ed.position?.z||0},rotation:{x:ed.rotation?.x||0,y:ed.rotation?.y||0,z:ed.rotation?.z||0},arrayBuffer:ab,wireframe:!!ed.wireframe});
                                     mesh.visible=ed.visible!==false;
-                                }catch(err){console.warn('외함 복원 오류:',err);}
+                                }catch(err){console.warn('3D 모델 복원 오류:',err);}
                             });
                             selectedEnclosureIdx=loadedEnclosures.length>0?0:-1;
                             updateEnclosureUI();
@@ -2075,7 +2097,7 @@ function migrateWireData(wires){
 function importData(){const input=document.createElement('input');input.type='file';input.accept='.json';input.onchange=e=>{const reader=new FileReader();reader.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.wires){wires=migrateWireData(d.wires);wireIdCounter=Math.max(...wires.map(w=>w.id),0);selectedWireId=null;document.getElementById('bend-list').innerHTML='';bendCount=0;if(wires.length)selectWire(wires[0].id);renderWireList();updateAll();}}catch(err){alert('오류:'+err.message);}};reader.readAsText(e.target.files[0]);};input.click();}
 
 // ============================================================
-//  외함 3D 모델 (STL/OBJ) 관리
+//  3D 모델 (STL/OBJ) 관리
 // ============================================================
 function loadEnclosure(){
     const input=document.createElement('input');input.type='file';input.accept='.stl,.obj';
@@ -2118,7 +2140,8 @@ function loadEnclosure(){
 }
 
 function addEnclosureMesh(name,geom,arrayBuffer){
-    const mat=new THREE.MeshPhongMaterial({color:'#888888',transparent:true,opacity:0.4,side:THREE.DoubleSide,depthWrite:false});
+    const initOpacity=0.4;
+    const mat=new THREE.MeshPhongMaterial({color:'#888888',transparent:initOpacity<1.0,opacity:initOpacity,side:THREE.DoubleSide,depthWrite:initOpacity>=1.0});
     const mesh=new THREE.Mesh(geom,mat);
     enclosureGroup.add(mesh);
     const enc={name,mesh,visible:true,opacity:0.4,color:'#888888',scale:1,position:{x:0,y:0,z:0},rotation:{x:0,y:0,z:0},arrayBuffer,wireframe:false};
@@ -2160,11 +2183,15 @@ function toggleEncVisible(idx){
     updateEnclosureUI();
 }
 
+function applyEncOpacityMaterial(mat, opacity){
+    if(opacity>=1.0){ mat.transparent=false; mat.depthWrite=true; mat.opacity=1.0; }
+    else { mat.transparent=true; mat.depthWrite=false; mat.opacity=opacity; }
+}
 function onEncOpacity(val){
     if(selectedEnclosureIdx<0) return;
     const enc=loadedEnclosures[selectedEnclosureIdx];
     enc.opacity=parseInt(val)/100;
-    enc.mesh.material.opacity=enc.opacity;
+    applyEncOpacityMaterial(enc.mesh.material, enc.opacity);
     document.getElementById('enc-opacity-label').textContent=val+'%';
 }
 
@@ -2181,6 +2208,7 @@ function onEncScale(val){
     const enc=loadedEnclosures[selectedEnclosureIdx];
     enc.scale=s;
     enc.mesh.scale.set(s,s,s);
+    invalidateEncCache(enc); drawPlan();
 }
 
 function onEncUnitChange(val){
@@ -2200,16 +2228,79 @@ function onEncPosition(){
     const z=parseFloat(document.getElementById('enc-pos-z').value)||0;
     enc.position={x,y,z};
     enc.mesh.position.set(x,y,z);
+    invalidateEncCache(enc); drawPlan();
 }
 
-function onEncRotation(){
+function rotateEnc(axis, deg){
     if(selectedEnclosureIdx<0) return;
     const enc=loadedEnclosures[selectedEnclosureIdx];
-    const rx=THREE.MathUtils.degToRad(parseFloat(document.getElementById('enc-rot-x').value)||0);
-    const ry=THREE.MathUtils.degToRad(parseFloat(document.getElementById('enc-rot-y').value)||0);
-    const rz=THREE.MathUtils.degToRad(parseFloat(document.getElementById('enc-rot-z').value)||0);
-    enc.rotation={x:rx,y:ry,z:rz};
-    enc.mesh.rotation.set(rx,ry,rz);
+    enc.rotation[axis]+=THREE.MathUtils.degToRad(deg);
+    enc.mesh.rotation.set(enc.rotation.x, enc.rotation.y, enc.rotation.z);
+    invalidateEncCache(enc);
+    drawPlan();
+}
+
+// 2D 투영 캐시: enclosure의 삼각형을 미리 2D 좌표로 변환
+// 3D 모델 2D 평면도: 오프스크린 Three.js 정투영 렌더링
+let _encRenderer=null, _encScene=null, _encCamera=null;
+function invalidateEncCache(){}
+function invalidateAllEncCache(){}
+
+function drawEnclosures2D(ctx, scale, cx, cy, midX, midY){
+    if(!loadedEnclosures.length) return;
+    const hasVisible=loadedEnclosures.some(e=>e.visible);
+    if(!hasVisible) return;
+
+    const W=planCanvas.width, H=planCanvas.height;
+
+    // 오프스크린 렌더러 초기화 (1회)
+    if(!_encRenderer){
+        _encRenderer=new THREE.WebGLRenderer({alpha:true, antialias:true});
+        _encScene=new THREE.Scene();
+        _encScene.add(new THREE.AmbientLight(0xffffff,0.6));
+        _encScene.add(new THREE.DirectionalLight(0xffffff,0.8));
+    }
+    _encRenderer.setSize(W, H);
+    _encRenderer.setClearColor(0x000000, 0);
+
+    // 정투영 카메라: 현재 2D 뷰와 동일한 영역
+    const halfW=(W/2)/scale, halfH=(H/2)/scale;
+    _encCamera=new THREE.OrthographicCamera(-halfW+midX, halfW+midX, -halfH+midY, halfH+midY, -10000, 10000);
+
+    // 카메라 방향: syncCam과 동일
+    const rad=THREE.MathUtils.degToRad(planRotation), cos=Math.cos(rad), sin=Math.sin(rad);
+    switch(planView){
+        case'front':
+            _encCamera.position.set(camDist*sin, 0, camDist*cos);
+            _encCamera.up.set(0,1,0);
+            // 정투영 범위 재설정 (front: X가 수평, Y가 수직)
+            _encCamera.left=midX-halfW; _encCamera.right=midX+halfW;
+            _encCamera.top=-midY+halfH; _encCamera.bottom=-midY-halfH;
+            break;
+        case'top':
+            _encCamera.position.set(0, camDist, 0);
+            _encCamera.up.set(-sin, 0, -cos);
+            _encCamera.left=midX-halfW; _encCamera.right=midX+halfW;
+            _encCamera.top=-midY+halfH; _encCamera.bottom=-midY-halfH;
+            break;
+    }
+    _encCamera.lookAt(0,0,0);
+    _encCamera.updateProjectionMatrix();
+
+    // 씬에 모델 복제
+    while(_encScene.children.length>2) _encScene.remove(_encScene.children[2]); // 조명 2개 유지
+    loadedEnclosures.forEach(enc=>{
+        if(!enc.visible||!enc.mesh) return;
+        const clone=enc.mesh.clone();
+        clone.material=enc.mesh.material.clone();
+        _encScene.add(clone);
+    });
+
+    // 렌더링
+    _encRenderer.render(_encScene, _encCamera);
+
+    // 2D 캔버스에 합성
+    ctx.drawImage(_encRenderer.domElement, 0, 0);
 }
 
 function toggleEncWireframe(){
@@ -2225,7 +2316,7 @@ function updateEnclosureUI(){
     const ctrlEl=document.getElementById('enc-controls');
     listEl.innerHTML='';
     if(loadedEnclosures.length===0){
-        listEl.innerHTML='<div style="color:#999;font-size:10px;text-align:center;padding:8px;">외함 없음</div>';
+        listEl.innerHTML='<div style="color:#999;font-size:10px;text-align:center;padding:8px;">3D 모델 없음</div>';
         ctrlEl.style.display='none';
         return;
     }
@@ -2249,9 +2340,6 @@ function updateEnclosureUI(){
         document.getElementById('enc-pos-x').value=enc.position.x;
         document.getElementById('enc-pos-y').value=enc.position.y;
         document.getElementById('enc-pos-z').value=enc.position.z;
-        document.getElementById('enc-rot-x').value=Math.round(THREE.MathUtils.radToDeg(enc.rotation.x));
-        document.getElementById('enc-rot-y').value=Math.round(THREE.MathUtils.radToDeg(enc.rotation.y));
-        document.getElementById('enc-rot-z').value=Math.round(THREE.MathUtils.radToDeg(enc.rotation.z));
         document.getElementById('enc-wireframe-btn').classList.toggle('active',enc.wireframe);
     } else {
         ctrlEl.style.display='none';
