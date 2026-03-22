@@ -1,0 +1,2013 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>전선 벤딩 3D 뷰어</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI',sans-serif;display:flex;flex-direction:column;height:100vh;background:#f0f2f5;color:#333;overflow:hidden;}
+
+/* Menubar */
+#menubar{display:flex;background:#fff;border-bottom:1px solid #ddd;padding:0 8px;height:28px;align-items:center;flex-shrink:0;z-index:200;}
+.menu-group{position:relative;}.menu-trigger{padding:3px 10px;font-size:12px;cursor:pointer;border-radius:3px;}.menu-trigger:hover{background:#e3f2fd;}
+.menu-dropdown{display:none;position:absolute;top:100%;left:0;background:#fff;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:220px;padding:4px 0;z-index:300;}
+.menu-dropdown.open{display:block;}.menu-item{padding:5px 14px;font-size:12px;cursor:pointer;display:flex;justify-content:space-between;}.menu-item:hover{background:#e3f2fd;}.menu-item span{font-size:10px;color:#999;margin-left:16px;}.menu-sep{height:1px;background:#eee;margin:3px 8px;}
+
+/* Main layout */
+#main-wrap{display:flex;flex:1;overflow:hidden;}
+
+/* Sidebar */
+#sidebar{width:300px;min-width:300px;background:#fff;padding:10px;overflow-y:auto;border-right:1px solid #ddd;display:flex;flex-direction:column;gap:8px;font-size:11px;}
+.section{background:#f8f9fa;border-radius:6px;padding:8px;border:1px solid #ddd;}
+.section h2{font-size:11px;color:#1976d2;margin-bottom:5px;cursor:default;}
+.form-row{display:flex;align-items:center;gap:4px;margin-bottom:4px;}
+.form-row label{font-size:10px;min-width:50px;color:#666;}
+.form-row input,.form-row select{flex:1;padding:3px 5px;border-radius:3px;border:1px solid #ccc;background:#fff;color:#333;font-size:10px;}
+.form-row input:focus{outline:none;border-color:#1976d2;}
+.form-row .unit{font-size:9px;color:#999;min-width:18px;}
+.color-input{width:24px;height:20px;border:1px solid #ccc;border-radius:3px;cursor:pointer;background:none;padding:0;}
+.btn{padding:4px 8px;border-radius:4px;border:none;cursor:pointer;font-size:10px;font-weight:bold;}
+.btn-primary{background:#d32f2f;color:#fff;}.btn-primary:hover{background:#e53935;}
+.btn-secondary{background:#e0e0e0;color:#333;}.btn-secondary:hover{background:#bdbdbd;}
+.btn-row{display:flex;gap:4px;}.btn-row .btn{flex:1;}
+.btn-move{padding:4px 8px;border-radius:4px;border:2px solid #1976d2;cursor:pointer;font-size:10px;font-weight:bold;background:#e3f2fd;color:#1976d2;flex:1;}
+.btn-move.active{background:#1976d2;color:#fff;}
+#wire-list{display:flex;flex-direction:column;gap:2px;max-height:100px;overflow-y:auto;}
+.wire-item{display:flex;align-items:center;gap:4px;padding:3px 6px;border-radius:4px;border:2px solid transparent;cursor:pointer;background:#fff;font-size:10px;}
+.wire-item.selected{border-color:#1976d2;background:#e3f2fd;}
+.wire-item .wire-color-dot{width:10px;height:10px;border-radius:50%;border:1px solid #ccc;flex-shrink:0;}
+.wire-item .wire-name{flex:1;font-weight:bold;}.wire-item .wire-del{background:none;border:none;color:#d32f2f;cursor:pointer;font-size:12px;padding:0 2px;}
+#bend-list{display:flex;flex-direction:column;gap:3px;max-height:150px;overflow-y:auto;}
+.bend-item{background:#fff;border-radius:4px;padding:5px;border:1px solid #ddd;}
+.bend-item .bend-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;}
+.bend-item .bend-num{font-size:10px;font-weight:bold;color:#d32f2f;}.bend-item .remove-btn{background:none;border:none;color:#d32f2f;cursor:pointer;font-size:12px;}
+.bend-item .form-row{margin-bottom:2px;}.bend-item .form-row label{min-width:40px;font-size:9px;}
+#total-length{font-size:11px;color:#1976d2;text-align:center;padding:3px;background:#e3f2fd;border-radius:3px;}
+
+/* View area */
+#view-area{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+#view-tabs{display:flex;background:#fff;border-bottom:1px solid #ddd;padding:0 8px;height:30px;align-items:center;gap:2px;flex-shrink:0;}
+.view-tab{padding:4px 14px;font-size:11px;font-weight:bold;cursor:pointer;border-radius:4px 4px 0 0;border:1px solid transparent;border-bottom:none;color:#666;}
+.view-tab.active{background:#f8f9fa;border-color:#ddd;color:#1976d2;}
+.view-tab:hover{background:#e3f2fd;}
+/* plan toolbar inside tab bar */
+.plan-tools{display:flex;gap:3px;margin-left:auto;align-items:center;}
+.plan-btn{padding:2px 8px;border-radius:3px;border:1px solid #ccc;background:#f5f5f5;color:#666;font-size:10px;cursor:pointer;font-weight:bold;}
+.plan-btn.active{background:#1976d2;color:#fff;border-color:#1976d2;}
+#view-panels{flex:1;display:flex;overflow:hidden;position:relative;}
+#panel-2d{flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden;}
+#panel-3d{flex:1;position:relative;overflow:hidden;}
+#panel-2d.hidden,#panel-3d.hidden{display:none;}
+#plan-canvas{width:100%;height:100%;display:block;background:#fff;cursor:crosshair;}
+#canvas-container{width:100%;height:100%;}
+
+/* CAD input */
+#cad-input{display:none;position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:#fff;border:2px solid #1976d2;border-radius:6px;padding:8px 12px;z-index:50;box-shadow:0 2px 12px rgba(0,0,0,0.15);}
+#cad-input .cad-row{display:flex;align-items:center;gap:6px;}
+#cad-dir-label{font-size:12px;color:#1976d2;font-weight:bold;min-width:45px;}
+#cad-length{padding:5px 8px;border:2px solid #1976d2;border-radius:4px;font-size:15px;font-weight:bold;width:120px;}
+#cad-input .cad-hint{font-size:9px;color:#999;margin-top:3px;text-align:center;}
+
+#info-overlay{position:absolute;top:6px;right:6px;background:rgba(255,255,255,0.85);padding:4px 8px;border-radius:4px;font-size:9px;color:#888;border:1px solid #ddd;}
+#info-overlay div{margin-bottom:1px;}
+
+#edit-popup{position:absolute;display:none;background:#fff;border:2px solid #d32f2f;border-radius:6px;padding:8px;z-index:100;box-shadow:0 4px 15px rgba(0,0,0,0.15);}
+#edit-popup label{font-size:10px;color:#666;display:block;margin-bottom:2px;}
+#edit-popup input{width:80px;padding:4px;border-radius:3px;border:1px solid #ccc;font-size:12px;}
+#edit-popup .popup-btns{display:flex;gap:4px;margin-top:4px;}
+#edit-popup .popup-btns button{flex:1;padding:3px;border-radius:3px;border:none;cursor:pointer;font-size:10px;font-weight:bold;}
+.popup-ok{background:#d32f2f;color:#fff;}.popup-cancel{background:#e0e0e0;color:#333;}
+#view-divider{width:4px;background:#ddd;cursor:col-resize;flex-shrink:0;}
+
+/* Sidebar wrappers & toggle */
+.sidebar-wrap{position:relative;display:flex;flex-shrink:0;overflow:visible;}
+.sidebar-wrap.collapsed .sidebar-content{display:none;}
+.sidebar-wrap.collapsed{min-width:0;width:0;overflow:visible;}
+.sidebar-toggle{position:absolute;top:50%;transform:translateY(-50%);width:18px;height:48px;background:#fff;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:100;font-size:11px;color:#666;border-radius:0 4px 4px 0;box-shadow:1px 0 4px rgba(0,0,0,0.08);}
+.sidebar-toggle:hover{background:#e3f2fd;color:#1976d2;}
+.sidebar-toggle.left{right:-18px;}
+.sidebar-toggle.right{left:-18px;border-radius:4px 0 0 4px;box-shadow:-1px 0 4px rgba(0,0,0,0.08);}
+
+/* Right sidebar */
+#right-sidebar{width:250px;min-width:250px;background:#fff;padding:10px;overflow-y:auto;border-left:1px solid #ddd;display:flex;flex-direction:column;gap:8px;font-size:11px;}
+#right-sidebar .section h2{font-size:11px;color:#e65100;margin-bottom:5px;cursor:default;}
+#bg-thumb-list{display:flex;flex-direction:column;gap:3px;max-height:160px;overflow-y:auto;}
+.bg-thumb-item{display:flex;align-items:center;gap:4px;padding:3px 5px;border-radius:4px;border:2px solid transparent;cursor:pointer;background:#fff;font-size:10px;}
+.bg-thumb-item.selected{border-color:#e65100;background:#fff3e0;}
+.bg-thumb-item .bg-thumb-img{width:40px;height:30px;object-fit:contain;border:1px solid #ddd;border-radius:3px;background:#fafafa;}
+.bg-thumb-item .bg-thumb-name{flex:1;font-weight:bold;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bg-thumb-item .bg-thumb-del{background:none;border:none;color:#d32f2f;cursor:pointer;font-size:12px;padding:0 2px;}
+#bg-opacity-slider{width:100%;}
+.rbtn{padding:3px 7px;border-radius:3px;border:1px solid #ccc;background:#f5f5f5;color:#666;font-size:10px;cursor:pointer;font-weight:bold;}
+.rbtn.active{background:#e65100;color:#fff;border-color:#e65100;}
+.rbtn:hover:not(.active){background:#fff3e0;}
+#right-sidebar .btn-row{display:flex;gap:4px;flex-wrap:wrap;}
+#right-sidebar .btn-row .rbtn{flex:1;text-align:center;min-width:0;}
+.bg-no-image{color:#999;font-size:10px;text-align:center;padding:12px 4px;}
+</style>
+</head>
+<body>
+<div id="menubar">
+    <div class="menu-group"><div class="menu-trigger" onclick="toggleMenu('file-menu')">파일</div><div class="menu-dropdown" id="file-menu">
+        <div class="menu-item" onclick="newProject()">새 프로젝트<span>Ctrl+N</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" onclick="saveProject()">프로젝트 저장<span>Ctrl+S</span></div>
+        <div class="menu-item" onclick="loadProject()">프로젝트 열기<span>Ctrl+O</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" onclick="exportData()">전선 데이터 내보내기</div>
+        <div class="menu-item" onclick="importData()">전선 데이터 불러오기</div>
+    </div></div>
+    <div class="menu-group"><div class="menu-trigger" onclick="toggleMenu('edit-menu')">편집</div><div class="menu-dropdown" id="edit-menu">
+        <div class="menu-item" onclick="undo()">실행 취소<span>Ctrl+Z</span></div>
+        <div class="menu-item" onclick="redo()">다시 실행<span>Ctrl+Shift+Z</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" onclick="addWire()">새 전선<span>Ctrl+W</span></div>
+        <div class="menu-item" onclick="duplicateWire()">복제<span>Ctrl+D</span></div>
+        <div class="menu-item" onclick="deleteSelectedWire()">삭제<span>Del</span></div>
+    </div></div>
+    <div class="menu-group"><div class="menu-trigger" onclick="toggleMenu('view-menu')">보기</div><div class="menu-dropdown" id="view-menu">
+        <div class="menu-item" onclick="resetView()">뷰 초기화<span>Home</span></div>
+        <div class="menu-item" onclick="setViewMode('2d')">2D만<span>F1</span></div>
+        <div class="menu-item" onclick="setViewMode('3d')">3D만<span>F2</span></div>
+        <div class="menu-item" onclick="setViewMode('split')">2D+3D<span>F3</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" onclick="setPlanView('front')">정면<span>1</span></div>
+        <div class="menu-item" onclick="setPlanView('top')">상면<span>2</span></div>
+        <div class="menu-item" onclick="rotatePlan(-1)">좌회전<span>Q</span></div>
+        <div class="menu-item" onclick="rotatePlan(1)">우회전<span>E</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" onclick="toggleMoveMode()">이동 모드<span>M</span></div>
+        <div class="menu-item" onclick="toggleDimMode()">치수 측정<span>D</span></div>
+        <div class="menu-item" onclick="clearDimResults()">측정 지우기</div>
+    </div></div>
+</div>
+
+<div id="main-wrap">
+<div class="sidebar-wrap" id="left-sidebar-wrap">
+    <div id="sidebar" class="sidebar-content">
+        <div class="section">
+            <h2>전선 목록</h2>
+            <div id="wire-list"></div>
+            <div class="btn-row" style="margin-top:4px;"><button class="btn btn-primary" onclick="addWire()">+ 새 전선</button><button class="btn btn-secondary" onclick="duplicateWire()">복제</button></div>
+        </div>
+        <div class="section" id="wire-settings">
+            <h2>전선 설정</h2>
+            <div class="form-row"><label>이름</label><input type="text" id="wire-name" value="전선 1"></div>
+            <div class="form-row"><label>두께</label><input type="number" id="wire-diameter" value="6" min="0.5" step="0.5"><span class="unit">mm</span></div>
+            <div class="form-row"><label>색상</label><input type="color" id="wire-color" value="#ff6b35" class="color-input"><select id="wire-preset-color"><option value="">프리셋</option><option value="#ff6b35">주황</option><option value="#000000">검정</option><option value="#2196f3">파랑</option><option value="#4caf50">녹색</option><option value="#ffffff">흰색</option><option value="#ff0000">빨강</option><option value="#ffeb3b">노랑</option></select></div>
+            <div class="form-row"><label>R / 시작</label><input type="number" id="bend-radius" value="10" min="1" step="1" style="width:50px;flex:none;" placeholder="R"><input type="number" id="start-length" value="0" min="0" step="10" style="width:50px;flex:none;" placeholder="시작"><span class="unit">mm</span></div>
+            <div class="form-row"><label>위치</label><input type="number" id="start-x" value="0" step="10" style="width:45px;flex:none;" placeholder="X"><input type="number" id="start-y" value="0" step="10" style="width:45px;flex:none;" placeholder="Y"><input type="number" id="start-z" value="0" step="10" style="width:45px;flex:none;" placeholder="Z"><span class="unit">mm</span></div>
+        </div>
+        <div class="section">
+            <h2 style="cursor:pointer;display:flex;justify-content:space-between;" onclick="toggleBendList()">벤딩 포인트 <span id="bend-toggle">▼</span></h2>
+            <div id="bend-wrap"><div id="bend-list"></div><div class="btn-row" style="margin-top:4px;"><button class="btn btn-primary" onclick="addBend()">+ 벤딩 추가</button></div></div>
+        </div>
+        <div id="total-length">총 길이: <span id="total-len-val">0</span> mm</div>
+        <div class="btn-row">
+            <button class="btn btn-move" id="move-toggle" onclick="toggleMoveMode()">이동 (M)</button>
+            <button class="btn btn-move" id="dim-btn2" onclick="toggleDimMode()">치수 측정 (D)</button>
+        </div>
+    </div>
+    <div class="sidebar-toggle left" onclick="toggleLeftSidebar()">◀</div>
+</div>
+
+<div id="view-area">
+    <div id="view-tabs">
+        <div class="view-tab" data-mode="2d" onclick="setViewMode('2d')">2D 도면</div>
+        <div class="view-tab active" data-mode="split" onclick="setViewMode('split')">2D + 3D</div>
+        <div class="view-tab" data-mode="3d" onclick="setViewMode('3d')">3D 뷰</div>
+        <div class="plan-tools">
+            <!-- 뷰 전환 -->
+            <button class="plan-btn active" id="plan-front" onclick="setPlanView('front')">정면</button>
+            <button class="plan-btn" id="plan-top" onclick="setPlanView('top')">상면</button>
+            <button class="plan-btn" onclick="rotatePlan(-1)">◀</button>
+            <button class="plan-btn" onclick="rotatePlan(1)">▶</button>
+            <span style="width:1px;height:16px;background:#ccc;margin:0 6px;"></span>
+            <!-- 도구 -->
+            <button class="plan-btn" id="dim-btn" onclick="toggleDimMode()">치수 측정</button>
+            <button class="plan-btn active" id="snap-btn" onclick="toggleSnap()">스냅</button>
+            <!-- hidden elements kept for code compatibility -->
+            <input type="hidden" id="bg-opacity" value="0.25">
+        </div>
+    </div>
+    <div id="view-panels">
+        <div id="panel-2d" style="position:relative;">
+            <canvas id="plan-canvas"></canvas>
+            <!-- 캘리브레이션 안내 UI -->
+            <div id="calib-guide" style="display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(25,118,210,0.95);color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:bold;z-index:60;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,0.2);">
+                <span id="calib-guide-text">치수를 아는 구간의 시작점을 클릭하세요</span>
+            </div>
+            <!-- 캘리브레이션 치수 입력 UI -->
+            <div id="calib-input" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border:2px solid #1976d2;border-radius:8px;padding:16px;z-index:70;box-shadow:0 4px 20px rgba(0,0,0,0.2);text-align:center;">
+                <div style="font-size:13px;color:#333;margin-bottom:8px;font-weight:bold;">두 점 사이의 실제 치수를 입력하세요</div>
+                <div style="display:flex;align-items:center;gap:6px;justify-content:center;">
+                    <input type="number" id="calib-mm-input" min="1" step="1" placeholder="치수" style="width:120px;padding:8px;border:2px solid #1976d2;border-radius:4px;font-size:18px;font-weight:bold;text-align:center;">
+                    <span style="font-size:14px;color:#666;">mm</span>
+                </div>
+                <div style="display:flex;gap:6px;margin-top:10px;justify-content:center;">
+                    <button onclick="confirmCalib()" style="padding:6px 20px;background:#1976d2;color:#fff;border:none;border-radius:4px;font-size:12px;font-weight:bold;cursor:pointer;">확인</button>
+                    <button onclick="cancelCalib()" style="padding:6px 14px;background:#e0e0e0;color:#333;border:none;border-radius:4px;font-size:12px;cursor:pointer;">취소</button>
+                </div>
+            </div>
+            <div id="cad-input"><div class="cad-row"><span id="cad-dir-label">→</span><input type="number" id="cad-length" value="" min="1" step="10" placeholder="길이 mm"><span style="font-size:11px;color:#999;">mm</span></div><div class="cad-hint">마우스=방향 / 숫자+Enter=확정 / Esc=취소</div></div>
+            <div id="edit-popup">
+                <label id="edit-popup-label">길이 수정</label>
+                <input type="number" id="edit-popup-input" step="10" min="1">
+                <div class="popup-btns"><button class="popup-ok" onclick="applyEditPopup()">확인</button><button class="popup-cancel" onclick="closeEditPopup()">취소</button></div>
+            </div>
+        </div>
+        <div id="view-divider"></div>
+        <div id="panel-3d">
+            <div id="canvas-container"></div>
+            <div id="info-overlay"><div>좌클릭: 회전</div><div>휠: 확대</div><div>우클릭: 이동</div></div>
+        </div>
+    </div>
+</div>
+<div class="sidebar-wrap" id="right-sidebar-wrap">
+    <div class="sidebar-toggle right" onclick="toggleRightSidebar()">▶</div>
+    <div id="right-sidebar" class="sidebar-content">
+        <div class="section">
+            <h2>배경 관리</h2>
+            <div id="bg-thumb-list">
+                <div class="bg-no-image" id="bg-no-image-msg">배경 이미지 없음</div>
+            </div>
+        </div>
+        <div class="section">
+            <h2>배경 도구</h2>
+            <div class="btn-row" style="margin-bottom:4px;">
+                <button class="rbtn" onclick="loadBgImage()">+ 배경 추가</button>
+                <button class="rbtn" id="rbg-calib-btn" onclick="startCalibration()">캘리브</button>
+            </div>
+            <div class="btn-row" style="margin-bottom:4px;">
+                <button class="rbtn" id="rbg-rot-btn" onclick="rotateBgImage()">회전</button>
+                <button class="rbtn" id="rbg-remove-btn" onclick="removeBgImage()" style="color:#d32f2f;">배경 제거</button>
+            </div>
+            <div class="form-row" style="margin-top:4px;">
+                <label style="min-width:40px;">투명도</label>
+                <input type="range" id="bg-opacity-slider" min="5" max="100" value="25" step="5" oninput="onOpacitySlider(this.value)">
+                <span id="bg-opacity-slider-label" style="font-size:10px;color:#666;min-width:28px;text-align:right;">25%</span>
+            </div>
+        </div>
+        <div class="section" id="rbg-group-section">
+            <h2>묶기 / 정렬</h2>
+            <div class="btn-row" style="margin-bottom:4px;">
+                <button class="rbtn" id="rbg-group-btn" onclick="toggleBgGroup()">묶기</button>
+                <button class="rbtn" id="rbg-cross-btn" onclick="toggleBgCrossGroup()">전체 묶기</button>
+            </div>
+            <div class="btn-row">
+                <button class="rbtn" id="rbg-align-btn" onclick="startBgAlign()">뷰 정렬</button>
+            </div>
+        </div>
+        <div class="section" id="rbg-3d-section">
+            <h2>3D 배경</h2>
+            <div class="form-row">
+                <label style="min-width:24px;"><input type="checkbox" id="bg3d-check" onchange="updateBg3D()" style="margin:0;"> 3D</label>
+                <input type="number" id="bg3d-dist" value="50" min="-1000" max="1000" step="10" onchange="updateBg3D()" style="width:65px;">
+                <span class="unit">mm</span>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// ============================================================
+//  VIEW MODE (2D / 3D / split)
+// ============================================================
+let viewMode = 'split';
+function setViewMode(mode) {
+    viewMode = mode;
+    document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
+    const p2d = document.getElementById('panel-2d');
+    const p3d = document.getElementById('panel-3d');
+    const divider = document.getElementById('view-divider');
+    p2d.classList.toggle('hidden', mode === '3d');
+    p3d.classList.toggle('hidden', mode === '2d');
+    divider.style.display = mode === 'split' ? '' : 'none';
+    setTimeout(() => { onResize(); }, 10);
+}
+
+// Sidebar toggle
+function toggleLeftSidebar(){
+    const wrap=document.getElementById('left-sidebar-wrap');
+    const btn=wrap.querySelector('.sidebar-toggle');
+    wrap.classList.toggle('collapsed');
+    btn.textContent=wrap.classList.contains('collapsed')?'▶':'◀';
+    setTimeout(()=>onResize(),10);
+}
+function toggleRightSidebar(){
+    const wrap=document.getElementById('right-sidebar-wrap');
+    const btn=wrap.querySelector('.sidebar-toggle');
+    wrap.classList.toggle('collapsed');
+    btn.textContent=wrap.classList.contains('collapsed')?'◀':'▶';
+    setTimeout(()=>onResize(),10);
+}
+// 우측 사이드바 input 이벤트 (3D 거리 등)
+document.addEventListener('DOMContentLoaded',()=>{
+    const rs=document.getElementById('right-sidebar');
+    if(rs) rs.addEventListener('input',e=>{
+        if(e.target.id==='bg3d-dist') updateBg3D();
+    });
+});
+// Opacity slider handler
+function onOpacitySlider(val){
+    val=parseInt(val);
+    const opacity=val/100;
+    const selBg=getSelectedBg();
+    if(!selBg) return;
+    if(bgCrossGrouped){
+        getAllBgImages().forEach(d=>{ d.bg.opacity=opacity; });
+    } else if(isBgGrouped()){
+        getBgList().forEach(bg=>{ bg.opacity=opacity; });
+    } else {
+        selBg.opacity=opacity;
+    }
+    document.getElementById('bg-opacity').value=opacity;
+    document.getElementById('bg-opacity-slider-label').textContent=val+'%';
+    drawPlan(); updateBg3D();
+}
+
+// Divider drag
+const divider = document.getElementById('view-divider');
+let divDragging = false, divStartX = 0, divStartW = 0;
+divider.addEventListener('mousedown', e => { divDragging = true; divStartX = e.clientX; divStartW = document.getElementById('panel-2d').offsetWidth; e.preventDefault(); });
+document.addEventListener('mousemove', e => { if (!divDragging) return; const dx = e.clientX - divStartX; document.getElementById('panel-2d').style.flex = 'none'; document.getElementById('panel-2d').style.width = Math.max(200, divStartW + dx) + 'px'; onResize(); });
+document.addEventListener('mouseup', () => { divDragging = false; });
+
+// ============================================================
+//  WIRE DATA MODEL
+// ============================================================
+let wires = [], selectedWireId = null, wireIdCounter = 0;
+function createWireData(name) { wireIdCounter++; return { id: wireIdCounter, name: name || `전선 ${wires.length+1}`, diameter:6, color:'#ff6b35', bendRadius:10, startLength:0, visible:true, startPos:{x:0,y:0,z:0}, initialDir:{x:0,y:0,z:1}, bends:[] }; }
+function getSelectedWire() { return wires.find(w => w.id === selectedWireId); }
+
+function saveSidebarToWire() {
+    const w = getSelectedWire(); if (!w) return;
+    w.name = document.getElementById('wire-name').value || w.name;
+    w.diameter = parseFloat(document.getElementById('wire-diameter').value) || 6;
+    w.color = document.getElementById('wire-color').value;
+    w.bendRadius = parseFloat(document.getElementById('bend-radius').value) || 10;
+    w.startLength = parseFloat(document.getElementById('start-length').value) || 0;
+    w.startPos = { x:parseFloat(document.getElementById('start-x').value)||0, y:parseFloat(document.getElementById('start-y').value)||0, z:parseFloat(document.getElementById('start-z').value)||0 };
+    w.bends = []; document.querySelectorAll('.bend-item').forEach(item => { w.bends.push({ axis:item.querySelector('.bend-axis').value, length:parseFloat(item.querySelector('.bend-length').value)||50 }); });
+}
+function loadWireToSidebar(w) {
+    document.getElementById('wire-name').value=w.name; document.getElementById('wire-diameter').value=w.diameter; document.getElementById('wire-color').value=w.color;
+    document.getElementById('bend-radius').value=w.bendRadius; document.getElementById('start-length').value=w.startLength;
+    document.getElementById('start-x').value=w.startPos.x; document.getElementById('start-y').value=w.startPos.y; document.getElementById('start-z').value=w.startPos.z;
+    document.getElementById('bend-list').innerHTML=''; bendCount=0; w.bends.forEach(b=>addBendUI(b)); updateTotalLength();
+}
+function selectWire(id) { if(selectedWireId) saveSidebarToWire(); selectedWireId=id; const w=getSelectedWire(); if(w) loadWireToSidebar(w); renderWireList(); updateAll(); }
+function addWire() { if(selectedWireId) saveSidebarToWire(); saveState(); const w=createWireData(); wires.push(w); selectWire(w.id); }
+function duplicateWire() { saveSidebarToWire(); const src=getSelectedWire(); if(!src) return; saveState(); const w=JSON.parse(JSON.stringify(src)); wireIdCounter++; w.id=wireIdCounter; w.name=src.name+' 복사'; w.startPos.x+=50; wires.push(w); selectWire(w.id); }
+function deleteWire(id) { saveState(); wires=wires.filter(w=>w.id!==id); if(selectedWireId===id){selectedWireId=wires.length>0?wires[0].id:null; if(selectedWireId)loadWireToSidebar(getSelectedWire()); else{document.getElementById('bend-list').innerHTML='';bendCount=0;}} renderWireList(); updateAll(); }
+function deleteSelectedWire() { if(selectedWireId) deleteWire(selectedWireId); }
+function toggleWireVisible(id,checked) { const w=wires.find(w=>w.id===id); if(w){saveState(); w.visible=checked; renderWireList(); updateAll();} }
+function renderWireList() { const list=document.getElementById('wire-list'); list.innerHTML=''; wires.forEach(w=>{ const div=document.createElement('div'); div.className='wire-item'+(w.id===selectedWireId?' selected':''); div.innerHTML=`<input type="checkbox" ${w.visible!==false?'checked':''} onclick="event.stopPropagation();toggleWireVisible(${w.id},this.checked)" style="margin:0;cursor:pointer;"><div class="wire-color-dot" style="background:${w.color};${w.visible===false?'opacity:0.3':''}"></div><span class="wire-name" style="${w.visible===false?'opacity:0.4;text-decoration:line-through':''}">${w.name}</span><button class="wire-del" onclick="event.stopPropagation();deleteWire(${w.id})">✕</button>`; div.onclick=()=>selectWire(w.id); list.appendChild(div); }); }
+
+// ============================================================
+//  3D SCENE
+// ============================================================
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xf0f2f5);
+const camera = new THREE.PerspectiveCamera(50,1,1,10000); camera.position.set(300,200,300);
+const renderer = new THREE.WebGLRenderer({antialias:true}); renderer.setPixelRatio(window.devicePixelRatio); container.appendChild(renderer.domElement);
+const orbitControls = new THREE.OrbitControls(camera, renderer.domElement); orbitControls.enableDamping=true; orbitControls.dampingFactor=0.05;
+scene.add(new THREE.AmbientLight(0x404040,0.6));
+const dl1=new THREE.DirectionalLight(0xffffff,0.8); dl1.position.set(200,300,200); scene.add(dl1);
+const dl2=new THREE.DirectionalLight(0x8888ff,0.3); dl2.position.set(-200,-100,-200); scene.add(dl2);
+scene.add(new THREE.GridHelper(1000,50,0x999999,0xcccccc)); scene.add(new THREE.AxesHelper(80));
+const wireGroup3D=new THREE.Group(); scene.add(wireGroup3D);
+let camDist=400, moveMode=false;
+function toggleMoveMode() { moveMode=!moveMode; const btn=document.getElementById('move-toggle'); btn.textContent=moveMode?'이동 ON':'이동 (M)'; btn.classList.toggle('active',moveMode); }
+
+// ============================================================
+//  UNDO/REDO
+// ============================================================
+let undoStack=[], redoStack=[];
+function saveBgState(){
+    // Image 객체 참조 포함하여 저장 (삭제 복원 가능)
+    const bgSnap={};
+    for(const k in bgImages){
+        const list=bgImages[k];
+        bgSnap[k]=list.map(bg=>({
+            img:bg.img, imgOriginal:bg.imgOriginal||null,
+            mmPerImgPx:bg.mmPerImgPx, offX:bg.offX, offY:bg.offY,
+            opacity:bg.opacity!=null?bg.opacity:0.25,
+            whiteTransparent:!!bg.whiteTransparent
+        }));
+    }
+    return {bgSnap, selectedBgIdx, bgGrouped:JSON.parse(JSON.stringify(bgGrouped)), bgCrossGrouped};
+}
+function restoreBgState(saved){
+    if(!saved) return;
+    if(saved.selectedBgIdx!=null) selectedBgIdx=saved.selectedBgIdx;
+    if(saved.bgGrouped) bgGrouped=JSON.parse(JSON.stringify(saved.bgGrouped));
+    if(saved.bgCrossGrouped!=null) bgCrossGrouped=saved.bgCrossGrouped;
+
+    // 호환: 구버전 bgMeta
+    if(saved.bgMeta && !saved.bgSnap){ saved.bgSnap=saved.bgMeta; }
+
+    const snap=saved.bgSnap;
+    if(!snap){ updateBgNav(); return; }
+
+    // 스냅샷에서 전체 복원 (Image 참조 포함)
+    bgImages={};
+    for(const k in snap){
+        bgImages[k]=snap[k].map(s=>({
+            img:s.img, imgOriginal:s.imgOriginal||null,
+            mmPerImgPx:s.mmPerImgPx, offX:s.offX, offY:s.offY,
+            opacity:s.opacity!=null?s.opacity:0.25,
+            whiteTransparent:!!s.whiteTransparent
+        }));
+    }
+    updateBgNav();
+}
+function makeUndoEntry(){ saveSidebarToWire(); return {wires:JSON.parse(JSON.stringify(wires)),selectedWireId,bgMeta:saveBgState(),dimResults:JSON.parse(JSON.stringify(dimResults))}; }
+function saveState() { undoStack.push(makeUndoEntry()); if(undoStack.length>50) undoStack.shift(); redoStack=[]; }
+function undo() { if(!undoStack.length) return; redoStack.push(makeUndoEntry()); restoreState(undoStack.pop()); }
+function redo() { if(!redoStack.length) return; undoStack.push(makeUndoEntry()); restoreState(redoStack.pop()); }
+function restoreState(s) { wires=s.wires; wireIdCounter=Math.max(...wires.map(w=>w.id),0); selectedWireId=s.selectedWireId; restoreBgState(s.bgMeta); if(s.dimResults) dimResults=s.dimResults; dimPoints=[]; const w=getSelectedWire(); if(w) loadWireToSidebar(w); renderWireList(); updateAll(); }
+
+// ============================================================
+//  MENU & SHORTCUTS
+// ============================================================
+function toggleMenu(id) { document.querySelectorAll('.menu-dropdown').forEach(m=>{if(m.id!==id) m.classList.remove('open');}); document.getElementById(id).classList.toggle('open'); }
+document.addEventListener('click', e => { if(!e.target.closest('.menu-group')) document.querySelectorAll('.menu-dropdown').forEach(m=>m.classList.remove('open')); });
+function newProject() { if(!confirm('현재 작업을 초기화하시겠습니까?')) return; wires=[]; selectedWireId=null; wireIdCounter=0; undoStack=[]; redoStack=[]; bgImages={}; bgGrouped={}; selectedBgIdx=0; dimResults=[]; bgCalib=null; document.getElementById('bend-list').innerHTML=''; bendCount=0; updateBgNav(); addWire(); }
+document.addEventListener('keydown', e => {
+    if(dimMode && e.key==='Escape'){
+        e.preventDefault();
+        if(dimDragging){ dimDragging=false; drawPlan(); return; } // 드래그 취소
+        if(dimSelectedIdx>=0){ dimSelectedIdx=-1; drawPlan(); return; } // 선택 해제
+        if(dimPoints.length>0){ dimPoints=[]; drawPlan(); return; } // 그리기 취소
+        toggleDimMode(); return; // 모드 종료
+    }
+    if(bgCalib && e.key==='Escape'){e.preventDefault();cancelCalib();return;}
+    if(cadMode) { if(e.key==='Enter'){e.preventDefault();applyCadInput();return;} if(e.key==='Escape'){e.preventDefault();cancelCadInput();return;} if(document.activeElement===document.getElementById('cad-length')) return; }
+    const c=e.ctrlKey||e.metaKey;
+    if(c&&e.key==='z'&&!e.shiftKey){e.preventDefault();undo();} if(c&&(e.key==='y'||(e.key==='z'&&e.shiftKey))){e.preventDefault();redo();}
+    if(c&&e.key==='n'){e.preventDefault();newProject();} if(c&&e.key==='s'){e.preventDefault();saveProject();} if(c&&e.key==='o'){e.preventDefault();loadProject();}
+    if(c&&e.key==='w'){e.preventDefault();addWire();} if(c&&e.key==='d'){e.preventDefault();duplicateWire();}
+    // Cmd+C: 선택된 배경 이미지 복사
+    if(c&&e.key==='c'&&!e.target.closest('input')&&getSelectedBg()&&!isBgGrouped()){
+        e.preventDefault();
+        const bg=getSelectedBg();
+        bgClipboard={img:bg.img, imgOriginal:bg.imgOriginal||bg.img, mmPerImgPx:bg.mmPerImgPx, opacity:bg.opacity!=null?bg.opacity:0.25};
+        return;
+    }
+    if(e.key==='Delete'&&!e.target.closest('input')){if(dimMode&&dimSelectedIdx>=0){saveState();dimResults.splice(dimSelectedIdx,1);dimSelectedIdx=-1;drawPlan();updateBg3D();return;}deleteSelectedWire();}
+    if(e.key==='Home'){e.preventDefault();resetView();}
+    if(e.key==='F1'){e.preventDefault();setViewMode('2d');} if(e.key==='F2'){e.preventDefault();setViewMode('3d');} if(e.key==='F3'){e.preventDefault();setViewMode('split');}
+    // 화살표키 처리
+    if((e.key==='ArrowUp'||e.key==='ArrowDown'||e.key==='ArrowLeft'||e.key==='ArrowRight') && !e.target.closest('input')){
+        // Cmd+화살표: 배경 이미지 이동 (Shift 추가 시 0.1mm)
+        if(c && getSelectedBg()){
+            e.preventDefault();
+            const step=e.shiftKey?0.1:1;
+            let dx=0, dy=0;
+            if(e.key==='ArrowLeft') dx=-step; if(e.key==='ArrowRight') dx=step;
+            if(e.key==='ArrowUp') dy=-step; if(e.key==='ArrowDown') dy=step;
+            saveState();
+            if(bgCrossGrouped){
+                getAllBgImages().forEach(d=>{
+                    d.bg.offX+=dx;
+                    if(d.view.startsWith(planView)) d.bg.offY+=dy;
+                });
+                if(dy!==0){
+                    // 다른 뷰 키들의 dist 연동
+                    for(const k in bgImages){
+                        if(!k.startsWith(planView)) bg3dDist[k]=(getBg3dDist(k))-dy;
+                    }
+                    document.getElementById('bg3d-dist').value=getBg3dDist();
+                }
+            } else {
+                let targets;
+                if(isBgGrouped()) targets=getBgList();
+                else targets=[getSelectedBg()];
+                targets.forEach(bg=>{ bg.offX+=dx; bg.offY+=dy; });
+            }
+            drawPlan(); updateBg3D(); return;
+        }
+        // 화살표 / Shift+화살표: 이동 모드에서 전선 이동
+        if(moveMode && !c){
+            const sw=getSelectedWire(); if(!sw) return;
+            e.preventDefault();
+            const step=e.shiftKey?1:10;
+            let dx=0, dy=0;
+            if(e.key==='ArrowLeft') dx=-step; if(e.key==='ArrowRight') dx=step;
+            if(e.key==='ArrowUp') dy=-step; if(e.key==='ArrowDown') dy=step;
+            // 화면 방향 → 3D 좌표 변환
+            const move3D=unproject2D(dx, dy);
+            saveState();
+            sw.startPos.x+=move3D.x; sw.startPos.y+=move3D.y; sw.startPos.z+=move3D.z;
+            document.getElementById('start-x').value=sw.startPos.x;
+            document.getElementById('start-y').value=sw.startPos.y;
+            document.getElementById('start-z').value=sw.startPos.z;
+            updateAll(); return;
+        }
+    }
+    // Cmd+숫자: 배경 이미지 선택
+    if(c && !e.target.closest('input') && e.key>='1' && e.key<='9'){
+        const idx=parseInt(e.key)-1; const list=getBgList();
+        if(idx<list.length){ e.preventDefault(); selectedBgIdx=idx; updateBgNav(); drawPlan(); return; }
+    }
+    if(!e.target.closest('input')){ if(e.key==='1') setPlanView('front'); if(e.key==='2') setPlanView('top'); if(e.key==='q'&&!c) rotatePlan(-1); if(e.key==='e'&&!c) rotatePlan(1); if(e.key==='m'&&!c) toggleMoveMode(); if(e.key==='d'&&!c) toggleDimMode(); }
+    if(e.key==='Escape'){if(bgAlignState) { cancelBgAlign(); return; } if(cadMode) cancelCadInput(); document.querySelectorAll('.menu-dropdown').forEach(m=>m.classList.remove('open'));}
+});
+
+// ============================================================
+//  BEND UI
+// ============================================================
+let bendCount=0;
+function addBend(){saveState();addBendUI();saveSidebarToWire();updateAll();}
+function addBendUI(data){bendCount++;const id=bendCount;const list=document.getElementById('bend-list');const item=document.createElement('div');item.className='bend-item';item.id=`bend-${id}`;
+    const ax = data?.axis || 'x+';
+    item.innerHTML=`<div class="bend-header"><span class="bend-num">#${id}</span><button class="remove-btn" onclick="removeBend(${id})">✕</button></div><div class="form-row"><label>방향</label><select class="bend-axis"><option value="x+" ${ax==='x+'?'selected':''}>→ X+</option><option value="x-" ${ax==='x-'?'selected':''}>← X-</option><option value="y+" ${ax==='y+'?'selected':''}>↑ Y+</option><option value="y-" ${ax==='y-'?'selected':''}>↓ Y-</option><option value="z+" ${ax==='z+'?'selected':''}>↗ Z+</option><option value="z-" ${ax==='z-'?'selected':''}>↙ Z-</option></select></div><div class="form-row"><label>길이</label><input type="number" class="bend-length" value="${data?data.length:100}" min="1" step="10"><span class="unit">mm</span></div>`;list.appendChild(item);}
+function removeBend(id){saveState();document.getElementById(`bend-${id}`)?.remove();document.querySelectorAll('.bend-item').forEach((el,i)=>el.querySelector('.bend-num').textContent=`#${i+1}`);saveSidebarToWire();updateAll();}
+function toggleBendList(){const w=document.getElementById('bend-wrap'),i=document.getElementById('bend-toggle');if(w.style.display==='none'){w.style.display='block';i.textContent='▼';}else{w.style.display='none';i.textContent='▶';}}
+function updateTotalLength(){const w=getSelectedWire();if(!w){document.getElementById('total-len-val').textContent='0';return;}let t=w.startLength;w.bends.forEach(b=>t+=b.length);document.getElementById('total-len-val').textContent=t.toFixed(0);}
+document.getElementById('sidebar').addEventListener('input',()=>{saveSidebarToWire();renderWireList();updateAll();});
+document.getElementById('wire-preset-color').addEventListener('change',e=>{if(e.target.value){document.getElementById('wire-color').value=e.target.value;saveSidebarToWire();renderWireList();updateAll();}});
+
+// ============================================================
+//  WIRE PATH BUILDER
+// ============================================================
+function axisToVec(axis){
+    switch(axis){case'x+':return new THREE.Vector3(1,0,0);case'x-':return new THREE.Vector3(-1,0,0);case'y+':return new THREE.Vector3(0,1,0);case'y-':return new THREE.Vector3(0,-1,0);case'z+':return new THREE.Vector3(0,0,-1);case'z-':return new THREE.Vector3(0,0,1);}
+    return new THREE.Vector3(1,0,0);
+}
+function vecToAxis(v){
+    const ax=v.clone().normalize();
+    if(Math.abs(ax.x)>0.5) return ax.x>0?'x+':'x-';
+    if(Math.abs(ax.y)>0.5) return ax.y>0?'y+':'y-';
+    if(Math.abs(ax.z)>0.5) return ax.z>0?'z-':'z+';
+    return 'x+';
+}
+function buildWireData(w){
+    const iDir=new THREE.Vector3(w.initialDir.x,w.initialDir.y,w.initialDir.z).normalize();
+    const bR=w.bendRadius||10;
+
+    // Theoretical (sharp) path - 각 벤딩은 절대 축 방향으로 진행
+    const nodes=[];
+    let p=new THREE.Vector3(), d=iDir.clone();
+    nodes.push({pos:p.clone(),label:w.startLength>0?w.startLength:null,type:'start'});
+    if(w.startLength>0) p=p.clone().add(d.clone().multiplyScalar(w.startLength));
+    w.bends.forEach(b=>{
+        nodes.push({pos:p.clone(),label:b.length,type:'bend'});
+        d=axisToVec(b.axis); // 절대 축 방향으로 전환
+        p=p.clone().add(d.clone().multiplyScalar(b.length));
+    });
+    nodes.push({pos:p.clone(),type:'end'});
+    const endDir=d.clone(),endUp=new THREE.Vector3(0,1,0);
+    if(Math.abs(endDir.dot(endUp))>0.99) endUp.set(0,0,1);
+
+    // 3D smooth path (아크 포함)
+    const pts=[];
+    let pos=new THREE.Vector3(), dir=iDir.clone();
+    pts.push(pos.clone());
+
+    // 세트백 계산 (모든 벤딩은 90도)
+    const setback = bR; // tan(45°) = 1, so setback = bR * 1
+
+    if(w.startLength>0){
+        const fs=w.bends.length>0?setback:0;
+        pos=pos.clone().add(dir.clone().multiplyScalar(Math.max(0,w.startLength-fs)));
+        pts.push(pos.clone());
+    }
+
+    w.bends.forEach((b,i)=>{
+        const newDir=axisToVec(b.axis);
+        // 아크: dir → newDir 로 90도 회전
+        const rotAxis=new THREE.Vector3().crossVectors(dir,newDir);
+        if(rotAxis.lengthSq()>0.0001){
+            rotAxis.normalize();
+            const angle=Math.acos(Math.min(1,Math.max(-1,dir.dot(newDir))));
+            const arcLen=bR*Math.abs(angle);
+            const steps=Math.max(12,Math.round(Math.abs(angle)*180/Math.PI/3));
+            const stepLen=arcLen/steps;
+            for(let s=1;s<=steps;s++){
+                const rd=dir.clone().applyAxisAngle(rotAxis,angle*(s/steps));
+                pos=pos.clone().add(rd.clone().multiplyScalar(stepLen));
+                pts.push(pos.clone());
+            }
+        }
+        dir=newDir.clone();
+        const thisS=setback;
+        const nextS=(i<w.bends.length-1)?setback:0;
+        const straight=Math.max(0,b.length-thisS-nextS);
+        pos=pos.clone().add(dir.clone().multiplyScalar(straight));
+        pts.push(pos.clone());
+    });
+
+    return{nodes,pts,endDir,endUp};
+}
+
+// ============================================================
+//  RENDER
+// ============================================================
+let allWireBuilds={};
+function updateAll(){
+    updateTotalLength();allWireBuilds={};
+    wires.forEach(w=>{allWireBuilds[w.id]=buildWireData(w);});
+    render3D();updateBg3D();drawPlan();
+}
+// 3D 배경 도면 평면
+let bg3DGroup = new THREE.Group(); scene.add(bg3DGroup);
+
+function updateBg3D(){
+    // 기존 제거
+    while(bg3DGroup.children.length){const c=bg3DGroup.children[0];if(c.geometry)c.geometry.dispose();if(c.material){if(c.material.map)c.material.map.dispose();c.material.dispose();}bg3DGroup.remove(c);}
+
+    const checked = document.getElementById('bg3d-check').checked;
+    if(!checked) return;
+    // 현재 뷰의 거리값 저장
+    bg3dDist[bgKey()] = parseFloat(document.getElementById('bg3d-dist').value) || 50;
+
+    let globalIdx=0;
+    for(const key in bgImages){
+        const list = bgImages[key];
+        if(!list || !Array.isArray(list)) continue;
+        // 키에서 뷰와 회전 분리: 'front_90' → view='front', rot=90
+        const parts=key.split('_');
+        const view=parts[0], rot=parseInt(parts[1])||0;
+        const dist = getBg3dDist(key);
+        const rotRad = THREE.MathUtils.degToRad(rot);
+
+        list.forEach((bg, bgIdx) => {
+            if(!bg || !bg.img) return;
+
+            const imgW = bg.img.width * bg.mmPerImgPx;
+            const imgH = bg.img.height * bg.mmPerImgPx;
+
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = bg.img.width;
+            offCanvas.height = bg.img.height;
+            const octx = offCanvas.getContext('2d');
+            octx.drawImage(bg.img, 0, 0);
+
+            const tex = new THREE.CanvasTexture(offCanvas);
+            const opacity = bg.opacity!=null ? bg.opacity : 0.25;
+            const mat = new THREE.MeshBasicMaterial({ map:tex, transparent:true, opacity:opacity, side:THREE.DoubleSide, depthWrite:false });
+            mat.polygonOffset = true;
+            mat.polygonOffsetFactor = 1;
+            mat.polygonOffsetUnits = globalIdx;
+            const geo = new THREE.PlaneGeometry(imgW, imgH);
+            const plane = new THREE.Mesh(geo, mat);
+            plane.renderOrder = globalIdx++;
+
+            const zOff = bgIdx * 0.5;
+            // offX/offY는 2D 평면도 좌표 → unproject2D로 3D 변환
+            const oldView=planView, oldRot=planRotation;
+            planView=view; planRotation=rot;
+            const pos3D=unproject2D(bg.offX, bg.offY);
+            planView=oldView; planRotation=oldRot;
+            if(view === 'front'){
+                plane.rotation.y = rotRad;
+                const sin=Math.sin(rotRad), cos=Math.cos(rotRad);
+                // 깊이 방향으로 dist 적용
+                plane.position.set(
+                    pos3D.x - sin*(dist+zOff),
+                    pos3D.y,
+                    pos3D.z - cos*(dist+zOff)
+                );
+            } else if(view === 'top'){
+                plane.rotation.x = -Math.PI/2;
+                plane.rotation.z = rotRad;
+                plane.position.set(pos3D.x, dist + zOff, pos3D.z);
+            }
+
+            bg3DGroup.add(plane);
+        });
+    }
+}
+
+function render3D(){
+    while(wireGroup3D.children.length){const c=wireGroup3D.children[0];c.traverse(x=>{if(x.geometry)x.geometry.dispose();if(x.material)x.material.dispose();});wireGroup3D.remove(c);}
+    wires.forEach(w=>{
+        if(w.visible===false)return;const bd=allWireBuilds[w.id];if(!bd||bd.pts.length<2)return;
+        const g=new THREE.Group();g.position.set(w.startPos.x,w.startPos.y,w.startPos.z);
+        const r=w.diameter/2;
+        const mat=new THREE.MeshPhongMaterial({color:new THREE.Color(w.color),shininess:80,specular:0x444444,transparent:w.id!==selectedWireId,opacity:w.id===selectedWireId?1:0.5});
+        // 직선(2점)이면 LineCurve3, 곡선이면 CatmullRomCurve3
+        let curve;
+        if(bd.pts.length===2){
+            curve=new THREE.LineCurve3(bd.pts[0],bd.pts[1]);
+        } else {
+            curve=new THREE.CatmullRomCurve3(bd.pts,false,'catmullrom',0.01);
+        }
+        const segments=bd.pts.length===2?1:bd.pts.length*6;
+        g.add(new THREE.Mesh(new THREE.TubeGeometry(curve,segments,r,12,false),mat));
+        // 양 끝 캡 (원형 디스크)
+        const capGeo=new THREE.CircleGeometry(r,12);
+        const startDir=bd.pts[1].clone().sub(bd.pts[0]).normalize();
+        const endDir=bd.pts[bd.pts.length-1].clone().sub(bd.pts[bd.pts.length-2]).normalize();
+        const sc=new THREE.Mesh(capGeo,mat.clone());
+        sc.position.copy(bd.pts[0]);
+        sc.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),startDir.clone().negate());
+        g.add(sc);
+        const ec=new THREE.Mesh(capGeo.clone(),mat.clone());
+        ec.position.copy(bd.pts[bd.pts.length-1]);
+        ec.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),endDir);
+        g.add(ec);
+        if(w.id===selectedWireId && bd.pts.length>2) g.add(new THREE.Mesh(new THREE.TubeGeometry(curve,bd.pts.length*4,r*1.8,8,false),new THREE.MeshBasicMaterial({color:0x1976d2,wireframe:true,transparent:true,opacity:0.3})));
+        wireGroup3D.add(g);
+    });
+}
+
+// ============================================================
+//  2D PLAN (full panel)
+// ============================================================
+const planCanvas=document.getElementById('plan-canvas'),planCtx=planCanvas.getContext('2d');
+let planView='front',planRotation=0,planZoom=2,planPanX=0,planPanY=0,planZoomInited=false;
+let planScreenPts=[],planScale=1,planMidX=0,planMidY=0,planCx=0,planCy=0;
+
+function _rotCS(){const r=THREE.MathUtils.degToRad(planRotation);return{c:Math.cos(r),s:Math.sin(r)};}
+// 2D ↔ 3D 변환: 3D 카메라와 동일한 투영
+// 정면: Y축 고정, 회전하면 X↔Z축이 전환
+// 상면: Y=0 평면에서 회전
+function project2D(v){
+    const{c,s}=_rotCS();
+    switch(planView){
+        case'front':return{x:v.x*c-v.z*s, y:-v.y};
+        case'top':return{x:v.x*c-v.z*s, y:v.x*s+v.z*c};
+        case'side':return{x:-v.x*s-v.z*c, y:-v.y};
+    }
+}
+function unproject2D(px,py){
+    const{c,s}=_rotCS();
+    switch(planView){
+        case'front':return{x:px*c, y:-py, z:-px*s};
+        case'top':return{x:px*c+py*s, y:0, z:-px*s+py*c};
+        case'side':return{x:-px*s, y:-py, z:-px*c};
+    }
+    return {x:px, y:0, z:-py};
+}
+// 배경 이미지 offX/offY를 화면 좌표로 변환 (뷰별)
+function projectBgOff(offX, offY){
+    const{c,s}=_rotCS();
+    switch(planView){
+        case'front':return{x:offX*c-0*s, y:offY}; // 배경 offY는 이미 화면 방향
+        case'top':return{x:offX*c, y:offX*s+offY*c}; // 간소화
+        case'side':return{x:-offX*s, y:offY};
+    }
+    return{x:offX,y:offY};
+}
+
+// 배경 도면 이미지 (뷰+회전별)
+// 키: 'front_0', 'front_90', 'top_0' 등
+let bgImages = {};
+let selectedBgIdx = 0;
+let bgGrouped = {};
+let bg3dDist = {}; // 뷰+회전별 3D 거리 (키: 'front_0', 'top_0' 등)
+function getBg3dDist(k){ return bg3dDist[k||bgKey()]!=null ? bg3dDist[k||bgKey()] : 50; }
+function bgKey(view, rot){ return (view||planView)+'_'+(rot!=null?rot:planRotation); }
+function getBgList(){ return bgImages[bgKey()] || []; }
+function getSelectedBg(){ const list=getBgList(); return list.length>0 ? list[Math.min(selectedBgIdx, list.length-1)] : null; }
+function hasBgInView(){ return getBgList().length > 0; }
+function isBgGrouped(){ return !!bgGrouped[bgKey()] && getBgList().length>1; }
+// 특정 뷰의 모든 회전에 배경이 있는지
+function hasAnyBgInView(view){ return [0,90,180,270].some(r=>(bgImages[bgKey(view,r)]||[]).length>0); }
+let bgCrossGrouped = false;
+function toggleBgGroup(){
+    bgGrouped[bgKey()]=!bgGrouped[bgKey()];
+    updateBgNav(); drawPlan();
+}
+function toggleBgCrossGroup(){
+    bgCrossGrouped=!bgCrossGrouped;
+    updateBgNav(); drawPlan();
+}
+function getAllBgImages(){
+    const result=[];
+    for(const k in bgImages){
+        const view=k.split('_')[0];
+        (bgImages[k]||[]).forEach(bg=>result.push({bg,key:k,view}));
+    }
+    return result;
+}
+function makeWhiteTransparent(img, threshold){
+    const c=document.createElement('canvas'); c.width=img.width; c.height=img.height;
+    const ctx=c.getContext('2d'); ctx.drawImage(img,0,0);
+    const id=ctx.getImageData(0,0,c.width,c.height); const d=id.data;
+    const t=threshold||230;
+    for(let i=0;i<d.length;i+=4){
+        if(d[i]>=t && d[i+1]>=t && d[i+2]>=t){
+            d[i+3]=0; // 알파를 0으로
+        }
+    }
+    ctx.putImageData(id,0,0);
+    const out=new Image(); out.src=c.toDataURL();
+    return out;
+}
+
+
+// ============================================================
+//  뷰 정렬 (정면-상면 배경 맞추기)
+// ============================================================
+let bgAlignState = null; // { step:1|2, frontY:number, view1:'front'|'top' }
+
+function viewLabel(v,r){ const vn={front:'정면',top:'상면',side:'측면'}; return (vn[v]||v)+(r?(' '+r+'°'):''); }
+
+function startBgAlign(){
+    bgAlignState = { step:1 };
+    showCalibGuide('정렬: 첫 번째 뷰에서 기준선을 클릭하세요 (수평선) [현재: '+viewLabel(planView,planRotation)+']');
+    const rab=document.getElementById('rbg-align-btn'); if(rab) rab.classList.add('active');
+}
+
+function cancelBgAlign(){
+    bgAlignState=null;
+    hideCalibGuide();
+    const rab2=document.getElementById('rbg-align-btn'); if(rab2) rab2.classList.remove('active');
+    drawPlan();
+}
+
+function handleAlignClick(x, y){
+    if(!bgAlignState) return false;
+    const mm=canvasToMm(x, y);
+    // 3D 좌표로 변환하여 저장
+    const world3D=unproject2D(0, mm.y);
+
+    if(bgAlignState.step===1){
+        bgAlignState.line1Y = mm.y;
+        bgAlignState.view1 = planView;
+        bgAlignState.rot1 = planRotation;
+        bgAlignState.world1 = world3D;
+        bgAlignState.step=2;
+        showCalibGuide('정렬: 다른 뷰/회전으로 이동 후 기준선을 클릭하세요 [첫 번째: '+viewLabel(planView,planRotation)+']');
+        return true;
+    }
+    if(bgAlignState.step===2){
+        bgAlignState.line2Y = mm.y;
+        bgAlignState.view2 = planView;
+        bgAlignState.rot2 = planRotation;
+        bgAlignState.world2 = world3D;
+        saveState();
+        applyBgAlign();
+        return true;
+    }
+    return false;
+}
+
+function applyBgAlign(){
+    const s=bgAlignState;
+    const v1=s.view1, v2=s.view2;
+    const w1=s.world1, w2=s.world2;
+
+    // 각 뷰의 깊이축 판별 (3D에서 평면이 놓이는 축)
+    // front: 깊이=Z (rot 0/180) 또는 X (rot 90/270)
+    // top: 깊이=Y
+    function getDepthInfo(view, rot){
+        if(view==='top') return {axis:'y', sign:1};
+        if(view==='front'||view==='side'){
+            if(rot===0) return {axis:'z', sign:-1};
+            if(rot===90) return {axis:'x', sign:1};
+            if(rot===180) return {axis:'z', sign:1};
+            if(rot===270) return {axis:'x', sign:-1};
+        }
+        return {axis:'z', sign:-1};
+    }
+
+    const d1=getDepthInfo(v1, s.rot1);
+    const d2=getDepthInfo(v2, s.rot2);
+
+    // 뷰1의 깊이 = 뷰2 기준선의 해당 축 좌표
+    // 뷰2의 깊이 = 뷰1 기준선의 해당 축 좌표
+    const dist1 = d1.sign * w2[d1.axis]; // 뷰1 평면 위치 = 뷰2 기준점의 깊이축 좌표
+    const dist2 = d2.sign * w1[d2.axis]; // 뷰2 평면 위치 = 뷰1 기준점의 깊이축 좌표
+
+    bg3dDist[bgKey(v1, s.rot1)] = dist1;
+    bg3dDist[bgKey(v2, s.rot2)] = dist2;
+    document.getElementById('bg3d-dist').value = getBg3dDist();
+
+    bgAlignState=null;
+    hideCalibGuide();
+    const rab3=document.getElementById('rbg-align-btn'); if(rab3) rab3.classList.remove('active');
+    drawPlan(); updateBg3D();
+}
+
+function drawAlignLine(){
+    if(!bgAlignState || bgAlignState.step!==2) return;
+    // 첫 번째 뷰의 라인은 이미 다른 뷰로 넘어갔으므로 표시 불필요
+    // 현재 뷰에서는 마우스 호버로 수평선 미리보기 (drawPlan 후 호출)
+}
+
+function updateBgNav(){
+    const list=getBgList();
+    const has=list.length>0;
+    const multi=list.length>1;
+    // 2개 이상 뷰/회전에 배경이 있으면 정렬 가능
+    const bgKeyCount=Object.keys(bgImages).filter(k=>(bgImages[k]||[]).length>0).length;
+    const multiViews=bgKeyCount>=2;
+    const showGroupArea=multi||multiViews;
+    if(!multiViews) bgCrossGrouped=false;
+
+    // --- 우측 사이드바 업데이트 ---
+    // 썸네일 목록
+    const thumbList=document.getElementById('bg-thumb-list');
+    const noMsg=document.getElementById('bg-no-image-msg');
+    if(thumbList){
+        thumbList.innerHTML='';
+        if(!has){
+            const msg=document.createElement('div');
+            msg.className='bg-no-image';
+            msg.id='bg-no-image-msg';
+            msg.textContent='배경 이미지 없음';
+            thumbList.appendChild(msg);
+        } else {
+            selectedBgIdx=Math.min(selectedBgIdx, list.length-1);
+            list.forEach((bg,i)=>{
+                if(!bg||!bg.img) return;
+                const div=document.createElement('div');
+                div.className='bg-thumb-item'+(i===selectedBgIdx?' selected':'');
+                const img=document.createElement('img');
+                img.className='bg-thumb-img';
+                // 썸네일을 canvas로 생성
+                const tc=document.createElement('canvas');
+                tc.width=40; tc.height=30;
+                const tctx=tc.getContext('2d');
+                const srcImg=bg.imgOriginal||bg.img;
+                const ar=srcImg.width/srcImg.height;
+                let dw=40,dh=30;
+                if(ar>40/30){dh=40/ar;}else{dw=30*ar;}
+                tctx.drawImage(srcImg,(40-dw)/2,(30-dh)/2,dw,dh);
+                img.src=tc.toDataURL();
+                div.appendChild(img);
+                const name=document.createElement('span');
+                name.className='bg-thumb-name';
+                name.textContent='배경 '+(i+1);
+                div.appendChild(name);
+                const del=document.createElement('button');
+                del.className='bg-thumb-del';
+                del.textContent='✕';
+                del.onclick=function(e){e.stopPropagation();selectedBgIdx=i;removeBgImage();};
+                div.appendChild(del);
+                div.onclick=function(){selectedBgIdx=i;updateBgNav();drawPlan();};
+                thumbList.appendChild(div);
+            });
+        }
+    }
+    // 버튼 상태
+    const rcalib=document.getElementById('rbg-calib-btn');
+    const rrot=document.getElementById('rbg-rot-btn');
+    const rremove=document.getElementById('rbg-remove-btn');
+    if(rcalib) rcalib.style.opacity=has?'1':'0.4';
+    if(rrot) rrot.style.opacity=has?'1':'0.4';
+    if(rremove) rremove.style.opacity=has?'1':'0.4';
+
+    // 묶기/정렬 섹션
+    const groupSection=document.getElementById('rbg-group-section');
+    if(groupSection) groupSection.style.display=showGroupArea?'':'none';
+    const rgroupBtn=document.getElementById('rbg-group-btn');
+    if(rgroupBtn){
+        rgroupBtn.style.display=multi?'':'none';
+        if(multi){
+            const grouped=isBgGrouped();
+            rgroupBtn.textContent=grouped?'풀기':'묶기';
+            rgroupBtn.classList.toggle('active',grouped);
+        }
+    }
+    const rcrossBtn=document.getElementById('rbg-cross-btn');
+    if(rcrossBtn){
+        rcrossBtn.style.display=multiViews?'':'none';
+        rcrossBtn.textContent=bgCrossGrouped?'전체 풀기':'전체 묶기';
+        rcrossBtn.classList.toggle('active',bgCrossGrouped);
+    }
+    const ralignBtn=document.getElementById('rbg-align-btn');
+    if(ralignBtn) ralignBtn.style.display=multiViews?'':'none';
+
+    // 3D 섹션
+    const r3dSection=document.getElementById('rbg-3d-section');
+    if(r3dSection) r3dSection.style.display=has?'':'none';
+
+    // 투명도 슬라이더
+    if(has){
+        selectedBgIdx=Math.min(selectedBgIdx, list.length-1);
+        const selBg=list[selectedBgIdx];
+        const opVal=selBg.opacity!=null?selBg.opacity:0.25;
+        document.getElementById('bg-opacity').value=opVal;
+        const slider=document.getElementById('bg-opacity-slider');
+        const sliderLabel=document.getElementById('bg-opacity-slider-label');
+        if(slider) slider.value=Math.round(opVal*100);
+        if(sliderLabel) sliderLabel.textContent=Math.round(opVal*100)+'%';
+    }
+}
+function prevBg(){ const list=getBgList(); if(list.length<2||isBgGrouped()) return; selectedBgIdx=(selectedBgIdx-1+list.length)%list.length; updateBgNav(); drawPlan(); }
+function nextBg(){ const list=getBgList(); if(list.length<2||isBgGrouped()) return; selectedBgIdx=(selectedBgIdx+1)%list.length; updateBgNav(); drawPlan(); }
+let bgDragging = false, bgDragStartX=0, bgDragStartY=0, bgOrigOffX=0, bgOrigOffY=0;
+let bgDragOrigOffsets = []; // 묶기 모드용: 드래그 시작 시 모든 이미지 offX/offY 저장
+let bgDragCrossData = []; // 전체 묶기용: 모든 뷰의 이미지 원본 위치
+let bgClipboard = null; // Cmd+C로 복사한 배경 이미지
+let bgDragOrigDist = {}; // 전체 묶기용: 드래그 시작 시 bg3dDist 원본
+
+// 캘리브레이션 상태
+let bgCalib = null; // { img, point1: {x,y}, point2: {x,y}, step: 1|2 }
+
+// 클립보드에서 이미지 붙여넣기 (Cmd+V / Ctrl+V)
+document.addEventListener('paste', e => {
+    // 복사한 배경 이미지 붙여넣기
+    if(bgClipboard){
+        e.preventDefault();
+        saveState();
+        const k=bgKey();
+        if(!bgImages[k]) bgImages[k]=[];
+        const newBg={img:bgClipboard.img, imgOriginal:bgClipboard.imgOriginal, mmPerImgPx:bgClipboard.mmPerImgPx, offX:planPanX, offY:planPanY, opacity:bgClipboard.opacity};
+        bgImages[k].push(newBg);
+        selectedBgIdx=bgImages[k].length-1;
+        bgClipboard=null;
+        updateBgNav(); drawPlan(); updateBg3D();
+        return;
+    }
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+        if (item.type.startsWith('image/')) {
+            e.preventDefault();
+            const blob = item.getAsFile();
+            const reader = new FileReader();
+            reader.onload = ev => {
+                const img = new Image();
+                img.onload = () => {
+                    // 초기 스케일: 이미지가 캔버스의 80%를 차지하도록
+const W=planCanvas.clientWidth*2, H=planCanvas.clientHeight*2;
+const fitScale = Math.min(W*0.8/img.width, H*0.8/img.height);
+const initMmPerImgPx = fitScale / (planScale || 2);
+if(!bgImages[bgKey()]) bgImages[bgKey()]=[];
+saveState();
+const newBg={ img, imgOriginal:img, mmPerImgPx: initMmPerImgPx, offX: planPanX, offY: planPanY, opacity: 0.25, whiteTransparent:true };
+bgImages[bgKey()].push(newBg);
+selectedBgIdx=bgImages[bgKey()].length-1;
+                    // 흰색 투명 기본 적용
+                    const wt=makeWhiteTransparent(img);
+                    wt.onload=()=>{ newBg.img=wt; updateBgNav(); drawPlan(); updateBg3D(); };
+                    updateBgNav();
+                    drawPlan();
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(blob);
+            return;
+        }
+    }
+});
+
+function loadBgImage(){
+    const input=document.createElement('input');input.type='file';input.accept='image/*';
+    input.onchange=e=>{
+        const file=e.target.files[0]; if(!file) return;
+        const reader=new FileReader();
+        reader.onload=ev=>{
+            const img=new Image();
+            img.onload=()=>{
+                // 캘리브레이션 모드 시작
+                const W2=planCanvas.clientWidth*2, H2=planCanvas.clientHeight*2;
+                const fs2=Math.min(W2*0.8/img.width, H2*0.8/img.height);
+                if(!bgImages[bgKey()]) bgImages[bgKey()]=[];
+                const newBg2={ img, imgOriginal:img, mmPerImgPx:fs2/(planScale||2), offX:planPanX, offY:planPanY, opacity: 0.25, whiteTransparent:true };
+                bgImages[bgKey()].push(newBg2);
+                selectedBgIdx=bgImages[bgKey()].length-1;
+                const wt2=makeWhiteTransparent(img);
+                wt2.onload=()=>{ newBg2.img=wt2; updateBgNav(); drawPlan(); updateBg3D(); };
+                updateBgNav();
+                drawPlan();
+            };
+            img.src=ev.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+    input.click();
+}
+
+function showCalibGuide(text){
+    document.getElementById('calib-guide').style.display='block';
+    document.getElementById('calib-guide-text').textContent=text;
+}
+function hideCalibGuide(){
+    document.getElementById('calib-guide').style.display='none';
+}
+
+function startCalibration(){
+    const selBg=getSelectedBg(); if(!selBg) return;
+    bgCalib = { img:selBg.img, point1:null, point2:null, step:1, bgIdx:selectedBgIdx };
+    showCalibGuide('① 치수를 아는 구간의 시작점을 클릭하세요');
+}
+
+function cancelCalib(){
+    if(bgCalib && bgCalib.step === 2){
+        // 두번째 점 취소 → 첫 점부터 다시
+        bgCalib.point1 = null;
+        bgCalib.point2 = null;
+        bgCalib.step = 1;
+        document.getElementById('calib-input').style.display='none';
+        showCalibGuide('① 치수를 아는 구간의 시작점을 클릭하세요');
+        drawPlan();
+    } else {
+        // 완전 취소
+        bgCalib = null;
+        hideCalibGuide();
+        document.getElementById('calib-input').style.display='none';
+        drawPlan();
+    }
+}
+
+function confirmCalib(){
+    const realMm = parseFloat(document.getElementById('calib-mm-input').value);
+    document.getElementById('calib-input').style.display='none';
+    hideCalibGuide();
+
+    if(!realMm || realMm <= 0 || !bgCalib){
+        bgCalib = null;
+        drawPlan();
+        return;
+    }
+
+    // 두 점은 mm 좌표 → 캔버스 좌표로 변환해서 이미지 픽셀 거리 계산
+    const p1s = mmToCanvas(bgCalib.point1.x, bgCalib.point1.y);
+    const p2s = mmToCanvas(bgCalib.point2.x, bgCalib.point2.y);
+    const canvasPxDist = Math.sqrt((p2s.x-p1s.x)**2 + (p2s.y-p1s.y)**2);
+
+    const bg = bgImages[bgKey()] && bgImages[bgKey()][bgCalib.bgIdx!=null?bgCalib.bgIdx:selectedBgIdx];
+    if(!bg){ bgCalib=null; drawPlan(); return; }
+    const imgPxDist = canvasPxDist / (bg.mmPerImgPx * planScale);
+    const newMmPerImgPx = realMm / imgPxDist;
+    if(isBgGrouped()){
+        const ratio = newMmPerImgPx / bg.mmPerImgPx;
+        getBgList().forEach(b=>{ b.mmPerImgPx *= ratio; });
+    } else {
+        bg.mmPerImgPx = newMmPerImgPx;
+    }
+
+    bgCalib = null;
+    const rcb=document.getElementById('rbg-calib-btn'); if(rcb) rcb.textContent='재캘리브';
+    drawPlan();
+    updateBg3D();
+}
+
+// Enter로도 확인 가능
+document.getElementById('calib-mm-input').addEventListener('keydown', e => {
+    if(e.key === 'Enter') { e.preventDefault(); confirmCalib(); }
+    if(e.key === 'Escape') { e.preventDefault(); cancelCalib(); }
+});
+
+function handleCalibClick(x, y){
+    if(!bgCalib) return false;
+
+    if(bgCalib.step === 1){
+        bgCalib.point1 = canvasToMm(x, y); // mm로 저장
+        bgCalib.step = 2;
+        drawPlan();
+        const ps = mmToCanvas(bgCalib.point1.x, bgCalib.point1.y);
+        drawCalibPoint(ps.x, ps.y, '1');
+        showCalibGuide('② 끝점을 클릭하세요');
+        return true;
+    }
+    if(bgCalib.step === 2){
+        bgCalib.point2 = canvasToMm(x, y); // mm로 저장
+        drawPlan();
+        drawCalibPoints();
+
+        hideCalibGuide();
+        document.getElementById('calib-input').style.display='block';
+        document.getElementById('calib-mm-input').value='';
+        setTimeout(() => document.getElementById('calib-mm-input').focus(), 50);
+        return true;
+    }
+    return false;
+}
+
+function drawCalibPoint(cx, cy, label){
+    const ctx = planCtx;
+    ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI*2);
+    ctx.fillStyle = '#ff0000'; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, cx, cy);
+}
+
+function drawCalibPoints(){
+    if(!bgCalib) return;
+    if(bgCalib.point1){
+        const p1s = mmToCanvas(bgCalib.point1.x, bgCalib.point1.y);
+        drawCalibPoint(p1s.x, p1s.y, '1');
+    }
+    if(bgCalib.point2){
+        const p2s = mmToCanvas(bgCalib.point2.x, bgCalib.point2.y);
+        drawCalibPoint(p2s.x, p2s.y, '2');
+        // 연결선
+        const p1s = mmToCanvas(bgCalib.point1.x, bgCalib.point1.y);
+        const ctx = planCtx;
+        ctx.setLineDash([6,4]); ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(p1s.x, p1s.y); ctx.lineTo(p2s.x, p2s.y); ctx.stroke();
+        ctx.setLineDash([]);
+    }
+}
+
+function rotateBgImage(){
+    const bg=getSelectedBg(); if(!bg) return;
+    saveState();
+    const targets=isBgGrouped()?getBgList():[bg];
+    let pending=targets.length;
+    targets.forEach(b=>{
+        // 원본도 함께 회전
+        const srcOrig=b.imgOriginal||b.img;
+        const srcDisp=b.img;
+        function rotateImg(src, cb){
+            const c=document.createElement('canvas');
+            c.width=src.height; c.height=src.width;
+            const ctx=c.getContext('2d');
+            ctx.translate(c.width/2, c.height/2);
+            ctx.rotate(Math.PI/2);
+            ctx.drawImage(src, -src.width/2, -src.height/2);
+            const out=new Image();
+            out.onload=()=>cb(out);
+            out.src=c.toDataURL();
+        }
+        rotateImg(srcOrig, newOrig=>{
+            b.imgOriginal=newOrig;
+            rotateImg(srcDisp, newDisp=>{
+                b.img=newDisp;
+                pending--;
+                if(pending<=0){ drawPlan(); updateBg3D(); }
+            });
+        });
+    });
+}
+function removeBgImage(){
+    saveState();
+    const list=getBgList();
+    if(list.length>0){
+        list.splice(selectedBgIdx, 1);
+        if(list.length===0){ delete bgImages[bgKey()]; delete bgGrouped[bgKey()]; }
+        else if(list.length<2) delete bgGrouped[bgKey()];
+        selectedBgIdx=Math.min(selectedBgIdx, Math.max(0,list.length-1));
+    }
+    bgCalib = null;
+    updateBgNav();
+    drawPlan();
+    updateBg3D();
+}
+
+// ============================================================
+//  치수 측정 (DIM)
+// ============================================================
+let dimMode = false;
+let dimPoints = []; // [{x,y}] mm 좌표 (plan 2D)
+let dimResults = []; // [{p1,p2,dist}] mm 좌표
+let dimSnapTarget = null;
+let dimSelectedIdx = -1;
+let dimDragging = false;
+let dimDragEnd = 0; // 1=p1, 2=p2, 3=전체 이동
+let dimDragStartMm = null;
+let dimOrigP1 = null, dimOrigP2 = null;
+let dimSnap = true; // 스냅 ON/OFF
+
+// 모든 치수 끝점을 mm 좌표로 수집
+function getDimEndPoints(){
+    const pts = [];
+    dimResults.forEach((d,i) => {
+        pts.push({x:d.p1.x, y:d.p1.y, idx:i, end:1});
+        pts.push({x:d.p2.x, y:d.p2.y, idx:i, end:2});
+    });
+    return pts;
+}
+
+// mm 좌표를 근처 치수 끝점에 스냅 (스냅 거리: 캔버스 기준 snapPx 픽셀)
+function snapToEndpoint(mm, excludeIdx){
+    if(!dimSnap) return mm;
+    const snapPx = 12; // 캔버스 픽셀 기준 스냅 거리
+    const snapMm = snapPx / planScale; // mm 변환
+    const pts = getDimEndPoints();
+    let best = snapMm, result = mm;
+    pts.forEach(p => {
+        if(excludeIdx !== undefined && p.idx === excludeIdx) return;
+        const dx = mm.x - p.x, dy = mm.y - p.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if(dist < best){ best = dist; result = {x:p.x, y:p.y}; }
+    });
+    // 와이어 노드에도 스냅
+    wires.forEach(w => {
+        if(w.visible===false) return;
+        const bd = allWireBuilds[w.id]; if(!bd) return;
+        const off = project2D(new THREE.Vector3(w.startPos.x, w.startPos.y, w.startPos.z));
+        bd.nodes.forEach(n => {
+            const p = project2D(n.pos);
+            const px = p.x + off.x, py = p.y + off.y;
+            const dx = mm.x - px, dy = mm.y - py;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            if(dist < best){ best = dist; result = {x:px, y:py}; }
+        });
+    });
+    return result;
+}
+
+function canvasToMm(cx,cy){ return { x:(cx-planCx)/planScale+planMidX, y:(cy-planCy)/planScale+planMidY }; }
+function mmToCanvas(mx,my){ return { x:planCx+(mx-planMidX)*planScale, y:planCy+(my-planMidY)*planScale }; }
+
+function toggleDimMode(){
+    dimMode = !dimMode;
+    dimPoints = [];
+    document.getElementById('dim-btn').classList.toggle('active', dimMode);
+    const btn2 = document.getElementById('dim-btn2');
+    if(btn2) btn2.classList.toggle('active', dimMode);
+    if(dimMode){
+        showCalibGuide('치수 측정: 시작점을 클릭하세요 (Esc로 종료)');
+    } else {
+        hideCalibGuide();
+    }
+    drawPlan();
+}
+
+function handleDimClick(x, y){
+    if(!dimMode) return false;
+
+    if(dimPoints.length===1 && dimSnapTarget){
+        dimPoints.push(snapToEndpoint(dimSnapTarget));
+    } else {
+        dimPoints.push(snapToEndpoint(canvasToMm(x, y)));
+    }
+    dimSnapTarget=null;
+
+    if(dimPoints.length === 1){
+        drawPlan();
+        showCalibGuide('치수 측정: 끝점을 클릭하세요 (Shift=수직/수평)');
+        return true;
+    }
+    if(dimPoints.length === 2){
+        saveState();
+        const dx = dimPoints[1].x - dimPoints[0].x, dy = dimPoints[1].y - dimPoints[0].y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        dimResults.push({ p1: dimPoints[0], p2: dimPoints[1], dist: Math.round(dist) });
+        dimPoints = [];
+        showCalibGuide(`${Math.round(dist)}mm — 계속 측정하려면 클릭, Esc로 종료`);
+        drawPlan(); updateBg3D();
+        return true;
+    }
+    return false;
+}
+
+function drawDimResults(){
+    const ctx = planCtx;
+    dimResults.forEach((d, i) => {
+        const s1=mmToCanvas(d.p1.x,d.p1.y), s2=mmToCanvas(d.p2.x,d.p2.y);
+        const mx=(s1.x+s2.x)/2, my=(s1.y+s2.y)/2;
+        const sdx=s2.x-s1.x, sdy=s2.y-s1.y;
+        const isV=Math.abs(sdx)<Math.abs(sdy);
+        const isSel = i===dimSelectedIdx;
+
+        ctx.strokeStyle=isSel?'#d32f2f':'#e65100';
+        ctx.lineWidth=isSel?3:2;
+        ctx.setLineDash([]);
+        ctx.beginPath();ctx.moveTo(s1.x,s1.y);ctx.lineTo(s2.x,s2.y);ctx.stroke();
+
+        // 양 끝 마크
+        const len=12;
+        if(isV){ctx.beginPath();ctx.moveTo(s1.x-len,s1.y);ctx.lineTo(s1.x+len,s1.y);ctx.stroke();ctx.beginPath();ctx.moveTo(s2.x-len,s2.y);ctx.lineTo(s2.x+len,s2.y);ctx.stroke();}
+        else{ctx.beginPath();ctx.moveTo(s1.x,s1.y-len);ctx.lineTo(s1.x,s1.y+len);ctx.stroke();ctx.beginPath();ctx.moveTo(s2.x,s2.y-len);ctx.lineTo(s2.x,s2.y+len);ctx.stroke();}
+
+        // 끝점 동그라미
+        [s1,s2].forEach(p=>{ctx.beginPath();ctx.arc(p.x,p.y,isSel?4:3,0,Math.PI*2);ctx.fillStyle=isSel?'#d32f2f':'#e65100';ctx.fill();});
+
+        // 치수 텍스트
+        ctx.save();ctx.font=`bold ${isSel?18:16}px sans-serif`;ctx.fillStyle=isSel?'#d32f2f':'#e65100';
+        if(isV){ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(`${d.dist}`,mx+14,my);}
+        else{ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(`${d.dist}`,mx,my-10);}
+        ctx.restore();
+
+        // 선택된 치수의 드래그 핸들
+        if(isSel){
+            [s1,s2].forEach(p=>{ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);ctx.fillStyle='rgba(211,47,47,0.3)';ctx.fill();ctx.strokeStyle='#d32f2f';ctx.lineWidth=2;ctx.stroke();});
+        }
+    });
+}
+
+function drawDimPreview(){
+    if(dimPoints.length !== 1) return;
+    const ctx = planCtx;
+    const ps = mmToCanvas(dimPoints[0].x, dimPoints[0].y);
+    ctx.beginPath(); ctx.arc(ps.x, ps.y, 5, 0, Math.PI*2);
+    ctx.fillStyle = '#e65100'; ctx.fill();
+}
+
+function clearDimResults(){ dimResults=[]; dimSelectedIdx=-1; drawPlan(); }
+function toggleSnap(){ dimSnap=!dimSnap; document.getElementById('snap-btn').classList.toggle('active',dimSnap); }
+
+function hitDimLine(cx,cy){
+    for(let i=dimResults.length-1;i>=0;i--){
+        const d=dimResults[i];
+        const s1=mmToCanvas(d.p1.x,d.p1.y), s2=mmToCanvas(d.p2.x,d.p2.y);
+        const dx=s2.x-s1.x, dy=s2.y-s1.y, l2=dx*dx+dy*dy;
+        if(l2<1) continue;
+        const t=Math.max(0,Math.min(1,((cx-s1.x)*dx+(cy-s1.y)*dy)/l2));
+        const px=s1.x+t*dx, py=s1.y+t*dy;
+        if(Math.sqrt((cx-px)**2+(cy-py)**2)<15) return i;
+    }
+    return -1;
+}
+
+function hitDimEnd(cx,cy){
+    if(dimSelectedIdx<0) return 0;
+    const d=dimResults[dimSelectedIdx];
+    const s1=mmToCanvas(d.p1.x,d.p1.y), s2=mmToCanvas(d.p2.x,d.p2.y);
+    if(Math.sqrt((cx-s1.x)**2+(cy-s1.y)**2)<20) return 1;
+    if(Math.sqrt((cx-s2.x)**2+(cy-s2.y)**2)<20) return 2;
+    return 0;
+}
+
+function rotatePlan(dir){
+    // 현재 화면 중심의 3D 좌표를 구함
+    const world3D=unproject2D(planPanX, planPanY);
+    planRotation=(planRotation+dir*90+360)%360;
+    // 새 회전에서 같은 3D 좌표가 중심에 오도록 팬 조정
+    const newPan=project2D(world3D);
+    planPanX=newPan.x; planPanY=newPan.y;
+    selectedBgIdx=0;
+    document.getElementById('bg3d-dist').value=getBg3dDist();
+    updateBgNav(); drawPlan();syncCam();
+}
+function syncCam(){const rad=THREE.MathUtils.degToRad(planRotation),cos=Math.cos(rad),sin=Math.sin(rad);switch(planView){case'front':camera.position.set(camDist*sin,0,camDist*cos);camera.up.set(0,1,0);break;case'side':camera.position.set(camDist*cos,0,-camDist*sin);camera.up.set(0,1,0);break;case'top':camera.position.set(camDist*0.05*sin,camDist,camDist*0.05*cos);camera.up.set(-sin,0,-cos);break;}orbitControls.target.set(0,0,0);
+    if(planView==='top'){
+        // 상면: 좌우 회전 잠금, 기울기 범위 제한 (뒤집힘 방지)
+        orbitControls.minPolarAngle=0.001;orbitControls.maxPolarAngle=Math.PI/2;
+        const az=orbitControls.getAzimuthalAngle();
+        orbitControls.minAzimuthAngle=az;orbitControls.maxAzimuthAngle=az;
+    } else {
+        orbitControls.minPolarAngle=0;orbitControls.maxPolarAngle=Math.PI;
+        orbitControls.minAzimuthAngle=-Infinity;orbitControls.maxAzimuthAngle=Infinity;
+    }
+    orbitControls.update();}
+function setPlanView(v){planView=v;planRotation=0;document.querySelectorAll('.plan-btn').forEach(b=>b.classList.remove('active'));const el=document.getElementById('plan-'+v);if(el)el.classList.add('active');
+    selectedBgIdx=0; document.getElementById('bg3d-dist').value=getBg3dDist(bgKey(v,0)); updateBgNav();
+    drawPlan();syncCam();}
+planCanvas.addEventListener('wheel',e=>{
+    e.preventDefault();
+    if(e.shiftKey && getSelectedBg()){
+        const selBg=getSelectedBg();
+        let val = selBg.opacity!=null ? selBg.opacity : 0.25;
+        const dy = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+        if(dy === 0) return;
+        val += dy < 0 ? 0.05 : -0.05;
+        val = Math.max(0.05, Math.min(1, Math.round(val*100)/100));
+        if(bgCrossGrouped){
+            getAllBgImages().forEach(d=>{ d.bg.opacity=val; });
+        } else if(isBgGrouped()){
+            getBgList().forEach(bg=>{ bg.opacity=val; });
+        } else {
+            selBg.opacity = val;
+        }
+        document.getElementById('bg-opacity').value = val;
+        const slider=document.getElementById('bg-opacity-slider');
+        const sliderLabel=document.getElementById('bg-opacity-slider-label');
+        if(slider) slider.value=Math.round(val*100);
+        if(sliderLabel) sliderLabel.textContent=Math.round(val*100)+'%';
+        drawPlan();
+        updateBg3D();
+        return;
+    }
+    const delta = e.deltaY || e.deltaX;
+    if(delta === 0) return;
+    planZoom=Math.max(0.2,Math.min(10,planZoom*(delta>0?0.85:1.18)));
+    drawPlan();
+},{passive:false});
+
+function drawPlan(){
+    const W=planCanvas.width=planCanvas.clientWidth*2,H=planCanvas.height=planCanvas.clientHeight*2;
+    if(W<10||H<10) return;
+    const ctx=planCtx;ctx.clearRect(0,0,W,H);
+    if(!planZoomInited){let ap=[];wires.forEach(w=>{const bd=allWireBuilds[w.id];if(bd)bd.nodes.forEach(n=>ap.push(project2D(n.pos)));});if(ap.length<1)ap=[{x:0,y:0}];let a=Infinity,b=-Infinity,c=Infinity,d=-Infinity;ap.forEach(p=>{a=Math.min(a,p.x);b=Math.max(b,p.x);c=Math.min(c,p.y);d=Math.max(d,p.y);});if(a===b){a-=100;b+=100;}if(c===d){c-=100;d+=100;}planZoom=Math.min((W-80)/(b-a),(H-80)/(d-c),3);planPanX=(a+b)/2;planPanY=(c+d)/2;planZoomInited=true;}
+    const scale=planZoom,cx=W/2,cy=H/2,midX=planPanX,midY=planPanY;
+    const toScr=p=>({x:cx+(p.x-midX)*scale,y:cy+(p.y-midY)*scale});
+    const vMnX=midX-W/2/scale,vMxX=midX+W/2/scale,vMnY=midY-H/2/scale,vMxY=midY+H/2/scale;
+    planScale=scale;planMidX=midX;planMidY=midY;planCx=cx;planCy=cy;
+    // Grid
+    const ns=[10,20,50,100,200,500,1000];let gs=50;for(const s of ns){if(s*scale>=40){gs=s;break;}}
+    ctx.strokeStyle='#e8e8e8';ctx.lineWidth=0.5;const su=gs/5,sp=su*scale;
+    if(sp>=8){for(let gx=Math.floor(vMnX/su)*su;gx<=vMxX;gx+=su){const sx=cx+(gx-midX)*scale;ctx.beginPath();ctx.moveTo(sx,0);ctx.lineTo(sx,H);ctx.stroke();}for(let gy=Math.floor(vMnY/su)*su;gy<=vMxY;gy+=su){const sy=cy+(gy-midY)*scale;ctx.beginPath();ctx.moveTo(0,sy);ctx.lineTo(W,sy);ctx.stroke();}}
+    ctx.strokeStyle='#bbb';ctx.lineWidth=1;
+    for(let gx=Math.floor(vMnX/gs)*gs;gx<=vMxX;gx+=gs){const sx=cx+(gx-midX)*scale;ctx.beginPath();ctx.moveTo(sx,0);ctx.lineTo(sx,H);ctx.stroke();ctx.fillStyle='#aaa';ctx.font='11px sans-serif';ctx.textAlign='center';ctx.fillText(Math.round(gx),sx,14);}
+    for(let gy=Math.floor(vMnY/gs)*gs;gy<=vMxY;gy+=gs){const sy=cy+(gy-midY)*scale;ctx.beginPath();ctx.moveTo(0,sy);ctx.lineTo(W,sy);ctx.stroke();ctx.fillStyle='#aaa';ctx.font='11px sans-serif';ctx.textAlign='left';ctx.fillText(Math.round(gy),4,sy-3);}
+    ctx.fillStyle='#999';ctx.font='bold 10px sans-serif';ctx.textAlign='right';ctx.fillText(`격자:${gs}mm`,W-8,14);ctx.textAlign='left';
+
+    // 배경 도면 이미지 - 현재 뷰+회전에 해당하는 배경만 표시
+    const bgList=getBgList();
+    bgList.forEach((bg,bgI)=>{
+        if(!bg||!bg.img) return;
+        ctx.save();
+        ctx.globalAlpha=bg.opacity!=null?bg.opacity:0.25;
+        const canvasPxPerImgPx = bg.mmPerImgPx * scale;
+        const iw = bg.img.width * canvasPxPerImgPx;
+        const ih = bg.img.height * canvasPxPerImgPx;
+        // offX/offY는 2D 평면도 좌표 (화면 기준)
+        const imgCenterX = cx + (bg.offX - midX) * scale;
+        const imgCenterY = cy + (bg.offY - midY) * scale;
+        ctx.translate(imgCenterX, imgCenterY);
+        ctx.drawImage(bg.img, -iw/2, -ih/2, iw, ih);
+        // 테두리 표시: 묶기 상태면 전체, 아니면 선택된 것만
+        if(bgList.length>1){
+            const grouped=isBgGrouped();
+            if(grouped){
+                ctx.strokeStyle='#e65100'; ctx.lineWidth=2; ctx.setLineDash([4,3]);
+                ctx.strokeRect(-iw/2, -ih/2, iw, ih);
+                ctx.setLineDash([]);
+            } else if(bgI===selectedBgIdx){
+                ctx.strokeStyle='#1976d2'; ctx.lineWidth=2; ctx.setLineDash([6,4]);
+                ctx.strokeRect(-iw/2, -ih/2, iw, ih);
+                ctx.setLineDash([]);
+            }
+        }
+        ctx.restore();
+    });
+
+    // Wires
+    planScreenPts=[];
+    wires.forEach(w=>{if(w.visible===false)return;const bd=allWireBuilds[w.id];if(!bd)return;const off=project2D(new THREE.Vector3(w.startPos.x,w.startPos.y,w.startPos.z));const pts=bd.nodes.map(n=>{const p=project2D(n.pos);return toScr({x:p.x+off.x,y:p.y+off.y});});const isSel=w.id===selectedWireId;const lw=Math.max(isSel?4:2,w.diameter*scale*0.15);
+    ctx.strokeStyle=w.color;ctx.lineWidth=lw;ctx.lineCap='round';ctx.lineJoin='round';ctx.globalAlpha=isSel?1:0.35;ctx.beginPath();pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));ctx.stroke();ctx.globalAlpha=1;
+    if(isSel){planScreenPts=pts;
+        // Dimensions
+        for(let i=0;i<bd.nodes.length-1;i++){const n=bd.nodes[i];if(!n.label)continue;const a=pts[i],b=pts[i+1],mx=(a.x+b.x)/2,my=(a.y+b.y)/2,sdx=b.x-a.x,sdy=b.y-a.y,isV=Math.abs(sdx)<Math.abs(sdy),gap=lw/2+14;
+        ctx.save();ctx.font='bold 14px sans-serif';ctx.fillStyle='#1976d2';
+        if(isV){ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(`${n.label}`,mx+gap,my);}
+        else{ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(`${n.label}`,mx,my-gap);}ctx.restore();}
+        // Dots
+        bd.nodes.forEach((n,i)=>{const sp=pts[i];if(n.type==='bend'){ctx.beginPath();ctx.arc(sp.x,sp.y,5,0,Math.PI*2);ctx.fillStyle='#d32f2f';ctx.fill();}else if(n.type==='start'){ctx.beginPath();ctx.arc(sp.x,sp.y,4,0,Math.PI*2);ctx.fillStyle='#1976d2';ctx.fill();}});
+        const ep=pts[pts.length-1];ctx.beginPath();ctx.arc(ep.x,ep.y,8,0,Math.PI*2);ctx.fillStyle='#4caf50';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+    }});
+    // Axis
+    const axL=35,axO=40,axOy=H-40;
+    [{l:'X',c:'#cc0000',v:new THREE.Vector3(1,0,0)},{l:'Y',c:'#00aa00',v:new THREE.Vector3(0,1,0)},{l:'Z',c:'#0055cc',v:new THREE.Vector3(0,0,1)}].forEach(a=>{const p=project2D(a.v),len=Math.sqrt(p.x*p.x+p.y*p.y);if(len<0.01)return;const nx=p.x/len*axL,ny=p.y/len*axL,ang=Math.atan2(ny,nx);ctx.beginPath();ctx.moveTo(axO,axOy);ctx.lineTo(axO+nx,axOy+ny);ctx.strokeStyle=a.c;ctx.lineWidth=4;ctx.lineCap='round';ctx.stroke();ctx.beginPath();ctx.moveTo(axO+nx,axOy+ny);ctx.lineTo(axO+nx-7*Math.cos(ang-0.4),axOy+ny-7*Math.sin(ang-0.4));ctx.moveTo(axO+nx,axOy+ny);ctx.lineTo(axO+nx-7*Math.cos(ang+0.4),axOy+ny-7*Math.sin(ang+0.4));ctx.lineWidth=3;ctx.stroke();ctx.fillStyle=a.c;ctx.font='bold 13px sans-serif';ctx.fillText(a.l,axO+nx*1.3-4,axOy+ny*1.3+4);});
+    ctx.font='bold 10px sans-serif';ctx.fillStyle='#888';ctx.fillText({front:'정면',side:'측면',top:'상면'}[planView]+(planRotation?` ${planRotation}°`:''),axO+30,axOy+4);
+
+    // 치수 측정 결과
+    drawDimResults();
+    drawDimPreview();
+    drawCalibPoints();
+}
+
+// ============================================================
+//  2D PLAN INTERACTION
+// ============================================================
+let cadMode=false,cadMouseX=0,cadMouseY=0,cadSnapDir=null,cadSnapDx=0,cadSnapDy=0;
+let planMoveDragging=false,planMoveStartX=0,planMoveStartY=0,planMoveOrigX=0,planMoveOrigY=0,planMoveOrigZ=0;
+let planPanning=false,planPanStartX=0,planPanStartY=0,planPanOrigX=0,planPanOrigY=0;
+
+planCanvas.addEventListener('contextmenu',e=>{
+    e.preventDefault();
+    if(dimMode){
+        dimPoints=[]; // 진행 중인 치수 취소
+        const{x,y}=getPlanXY(e);
+        const hitDim=hitDimLine(x,y);
+        dimSelectedIdx=hitDim>=0?hitDim:-1;
+        drawPlan();
+    }
+});
+function getPlanXY(e){const r=planCanvas.getBoundingClientRect();return{x:(e.clientX-r.left)*2,y:(e.clientY-r.top)*2};}
+function nearEnd(cx,cy){if(!planScreenPts.length)return false;const ep=planScreenPts[planScreenPts.length-1];return Math.sqrt((cx-ep.x)**2+(cy-ep.y)**2)<40;}
+function wireAtPoint(cx,cy){for(let i=wires.length-1;i>=0;i--){const w=wires[i],bd=allWireBuilds[w.id];if(!bd)continue;const off=project2D(new THREE.Vector3(w.startPos.x,w.startPos.y,w.startPos.z));const toScr=p=>({x:planCx+(p.x+off.x-planMidX)*planScale,y:planCy+(p.y+off.y-planMidY)*planScale});const pts=bd.nodes.map(n=>toScr(project2D(n.pos)));for(let j=0;j<pts.length-1;j++){const a=pts[j],b=pts[j+1],dx=b.x-a.x,dy=b.y-a.y,l2=dx*dx+dy*dy;if(l2<1)continue;const t=Math.max(0,Math.min(1,((cx-a.x)*dx+(cy-a.y)*dy)/l2)),px=a.x+t*dx,py=a.y+t*dy;if(Math.sqrt((cx-px)**2+(cy-py)**2)<15)return w.id;}}return null;}
+
+// 선택된 전선의 세그먼트 중 클릭된 것 찾기 (segIndex: -1=시작선, 0+=벤딩 후)
+function hitSegment(cx,cy){
+    if(!planScreenPts.length) return -2;
+    const sw=getSelectedWire(),bd=allWireBuilds[sw?.id];
+    if(!sw||!bd) return -2;
+    for(let j=0;j<planScreenPts.length-1;j++){
+        const a=planScreenPts[j],b=planScreenPts[j+1],dx=b.x-a.x,dy=b.y-a.y,l2=dx*dx+dy*dy;
+        if(l2<1)continue;
+        const t=Math.max(0,Math.min(1,((cx-a.x)*dx+(cy-a.y)*dy)/l2)),px=a.x+t*dx,py=a.y+t*dy;
+        if(Math.sqrt((cx-px)**2+(cy-py)**2)<12) return j; // j=0 → 시작선, j>=1 → 벤딩 j-1 후
+    }
+    return -2;
+}
+
+let editSegIdx=-2; // 현재 편집 중인 세그먼트
+function openSegEdit(segIdx, cx, cy){
+    editSegIdx=segIdx;
+    const sw=getSelectedWire(); if(!sw) return;
+    let val;
+    if(segIdx===0) val=sw.startLength;
+    else val=sw.bends[segIdx-1]?.length||0;
+
+    const popup=document.getElementById('edit-popup');
+    const label=document.getElementById('edit-popup-label');
+    const input=document.getElementById('edit-popup-input');
+    label.textContent=segIdx===0?'시작 길이 (mm)':`벤딩 #${segIdx} 후 길이 (mm)`;
+    input.value=val;
+    // 2D 패널 기준 위치
+    const rect=planCanvas.getBoundingClientRect();
+    popup.style.display='block';
+    popup.style.left=(cx/2+rect.left-document.getElementById('panel-2d').getBoundingClientRect().left)+'px';
+    popup.style.top=(cy/2+rect.top-document.getElementById('panel-2d').getBoundingClientRect().top-40)+'px';
+    input.focus();input.select();
+}
+
+function openCadInput(){cadMode=true;cadSnapDir=null;document.getElementById('cad-input').style.display='block';const li=document.getElementById('cad-length');li.value='';setTimeout(()=>li.focus(),50);}
+planCanvas.addEventListener('mousedown',function keepFocus(e){if(cadMode)e.preventDefault();},true);
+function cancelCadInput(){cadMode=false;document.getElementById('cad-input').style.display='none';drawPlan();}
+function getCadDirLabel(){if(!cadSnapDir)return'…';const w=unproject2D(cadSnapDx,cadSnapDy),v=new THREE.Vector3(w.x,w.y,w.z);if(Math.abs(v.x)>0.5)return v.x>0?'→ X+':'← X-';if(Math.abs(v.y)>0.5)return v.y>0?'↑ Y+':'↓ Y-';if(Math.abs(v.z)>0.5)return v.z>0?'↗ Z+ (앞)':'↙ Z- (뒤)';return'→';}
+
+function applyCadInput(){
+    const sw=getSelectedWire();if(!sw)return;if(!cadSnapDir){cadSnapDir='h';cadSnapDx=1;cadSnapDy=0;}
+    let len=parseFloat(document.getElementById('cad-length').value);if(!len||len<=0)return;
+    saveState();
+    const w3d=unproject2D(cadSnapDx,cadSnapDy),targetDir=new THREE.Vector3(w3d.x,w3d.y,w3d.z).normalize();
+    if(sw.startLength===0&&sw.bends.length===0){sw.initialDir={x:targetDir.x,y:targetDir.y,z:targetDir.z};sw.startLength=Math.round(len);loadWireToSidebar(sw);updateAll();document.getElementById('cad-length').value='';document.getElementById('cad-length').focus();if(planScreenPts.length){const ep=planScreenPts[planScreenPts.length-1];cadMouseX=ep.x;cadMouseY=ep.y;}cadSnapDir=null;drawPlan();return;}
+    const bd=allWireBuilds[sw.id];if(!bd)return;const fwd=bd.endDir.clone().normalize(),dot=fwd.dot(targetDir);
+    if(dot>0.5){if(sw.bends.length>0)sw.bends[sw.bends.length-1].length+=Math.round(len);else sw.startLength+=Math.round(len);}
+    else if(dot<-0.5){if(sw.bends.length>0)sw.bends[sw.bends.length-1].length=Math.max(1,sw.bends[sw.bends.length-1].length-Math.round(len));else sw.startLength=Math.max(1,sw.startLength-Math.round(len));}
+    else{
+        const newAxis=vecToAxis(targetDir);
+        sw.bends.push({axis:newAxis,length:Math.round(len)});
+    }
+    loadWireToSidebar(sw);updateAll();document.getElementById('cad-length').value='';document.getElementById('cad-length').focus();
+    // 새 끝점 위치로 마우스 좌표 리셋 (미리보기가 새 끝점에서 시작되도록)
+    if(planScreenPts.length){const ep=planScreenPts[planScreenPts.length-1];cadMouseX=ep.x;cadMouseY=ep.y;}
+    cadSnapDir=null; // 방향 리셋, 다음 마우스 이동으로 재설정
+    drawPlan();
+}
+
+// Enter/Esc는 document keydown에서 처리
+
+planCanvas.addEventListener('mousedown',e=>{
+    if(e.button!==0) return; // 좌클릭만
+    const{x,y}=getPlanXY(e);
+    // 캘리브레이션 모드
+    if(dimMode){
+        if(dimSelectedIdx>=0){
+            // 끝점 드래그
+            const de=hitDimEnd(x,y);
+            if(de>0){ saveState(); dimDragging=true; dimDragEnd=de; e.preventDefault(); return; }
+            // 선 위 클릭 → 전체 이동
+            const hitDim=hitDimLine(x,y);
+            if(hitDim===dimSelectedIdx){
+                saveState();
+                dimDragging=true; dimDragEnd=3;
+                dimDragStartMm=canvasToMm(x,y);
+                const d=dimResults[dimSelectedIdx];
+                dimOrigP1={x:d.p1.x,y:d.p1.y}; dimOrigP2={x:d.p2.x,y:d.p2.y};
+                e.preventDefault(); return;
+            }
+            // 다른 곳 클릭 → 선택 해제
+            dimSelectedIdx=-1; drawPlan();
+            return;
+        }
+        // 선택 안 된 상태 → 새 치수 그리기
+        if(handleDimClick(x,y)) return;
+    }
+    if(bgAlignState){ if(handleAlignClick(x,y)) return; }
+    if(bgCalib){ if(handleCalibClick(x,y)) return; }
+    // Shift+드래그: 배경 도면 이동 (묶기 시 전체, 아니면 선택된 것만)
+    if(e.shiftKey && getSelectedBg()){
+        saveState();
+        const selBg=getSelectedBg();
+        bgDragging=true; bgDragStartX=x; bgDragStartY=y;
+        bgOrigOffX=selBg.offX; bgOrigOffY=selBg.offY;
+        if(bgCrossGrouped){
+            // 전체 묶기: 모든 뷰의 모든 이미지 원본 위치 저장
+            bgDragOrigOffsets=[];
+            bgDragCrossData=[];
+            bgDragOrigDist=JSON.parse(JSON.stringify(bg3dDist));
+            for(const v in bgImages){
+                (bgImages[v]||[]).forEach(bg=>bgDragCrossData.push({bg,view:v,offX:bg.offX,offY:bg.offY}));
+            }
+        } else if(isBgGrouped()){
+            bgDragOrigOffsets=getBgList().map(bg=>({offX:bg.offX, offY:bg.offY}));
+        }
+        e.preventDefault(); return;
+    }
+    if(moveMode){const sw=getSelectedWire();if(!sw)return;planMoveDragging=true;planMoveStartX=x;planMoveStartY=y;planMoveOrigX=sw.startPos.x;planMoveOrigY=sw.startPos.y;planMoveOrigZ=sw.startPos.z;saveState();e.preventDefault();return;}
+    if(cadMode){e.preventDefault();if(planScreenPts.length){const ep=planScreenPts[planScreenPts.length-1],cdx=x-ep.x,cdy=y-ep.y;if(Math.abs(cdx)>=Math.abs(cdy)){cadSnapDir='h';cadSnapDx=cdx>=0?1:-1;cadSnapDy=0;}else{cadSnapDir='v';cadSnapDx=0;cadSnapDy=cdy>=0?1:-1;}}const li=document.getElementById('cad-length'),tv=parseFloat(li.value);if(!tv||tv<=0){if(planScreenPts.length){const ep=planScreenPts[planScreenPts.length-1],cdx=x-ep.x,cdy=y-ep.y,dist=cadSnapDir==='h'?Math.abs(cdx):Math.abs(cdy),mm=Math.round(dist/planScale);if(mm>=5)li.value=mm;}}applyCadInput();return;}
+    if(nearEnd(x,y)){openCadInput();if(planScreenPts.length){const ep=planScreenPts[planScreenPts.length-1],dx=x-ep.x,dy=y-ep.y;if(Math.abs(dx)<3&&Math.abs(dy)<3){cadSnapDir='h';cadSnapDx=1;cadSnapDy=0;}else if(Math.abs(dx)>=Math.abs(dy)){cadSnapDir='h';cadSnapDx=dx>0?1:-1;cadSnapDy=0;}else{cadSnapDir='v';cadSnapDx=0;cadSnapDy=dy>0?1:-1;}document.getElementById('cad-dir-label').textContent=getCadDirLabel();}return;}
+    // 선택된 전선의 세그먼트 클릭 → 치수 수정
+    const seg=hitSegment(x,y);
+    if(seg>=0){openSegEdit(seg,x,y);return;}
+    const hitId=wireAtPoint(x,y);if(hitId&&hitId!==selectedWireId){selectWire(hitId);return;}
+    planPanning=true;planPanStartX=x;planPanStartY=y;planPanOrigX=planPanX;planPanOrigY=planPanY;
+});
+
+planCanvas.addEventListener('mousemove',e=>{
+    const{x,y}=getPlanXY(e);
+    // 치수 드래그 (끝점 또는 전체 이동)
+    if(dimDragging && dimSelectedIdx>=0){
+        const d=dimResults[dimSelectedIdx];
+        let mm=canvasToMm(x,y);
+        if(dimDragEnd===3){
+            // 전체 이동
+            const dx=mm.x-dimDragStartMm.x, dy=mm.y-dimDragStartMm.y;
+            d.p1={x:dimOrigP1.x+dx, y:dimOrigP1.y+dy};
+            d.p2={x:dimOrigP2.x+dx, y:dimOrigP2.y+dy};
+        } else {
+            // 끝점 이동
+            if(e.shiftKey){
+                const other=dimDragEnd===1?d.p2:d.p1;
+                if(Math.abs(mm.x-other.x)>=Math.abs(mm.y-other.y)) mm.y=other.y;
+                else mm.x=other.x;
+            }
+            if(dimDragEnd===1) d.p1=mm; else d.p2=mm;
+        }
+        d.dist=Math.round(Math.sqrt((d.p2.x-d.p1.x)**2+(d.p2.y-d.p1.y)**2));
+        drawPlan();
+        return;
+    }
+    // 뷰 정렬 수평선 미리보기
+    if(bgAlignState){
+        drawPlan();
+        const ctx=planCtx;
+        const W=planCanvas.width;
+        // 마우스 Y좌표에 수평선
+        ctx.save();
+        ctx.strokeStyle='#e65100'; ctx.lineWidth=2; ctx.setLineDash([8,4]);
+        ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+        ctx.setLineDash([]);
+        // mm 표시
+        const mm=canvasToMm(x,y);
+        ctx.fillStyle='#e65100'; ctx.font='bold 13px sans-serif'; ctx.textAlign='left';
+        ctx.fillText(`Y=${Math.round(mm.y)}mm`, x+10, y-8);
+        ctx.restore();
+        return;
+    }
+    // 치수 측정 미리보기
+    if(dimMode && dimPoints.length===1){
+        drawPlan();
+        const ctx=planCtx;
+        const pMm=dimPoints[0];
+        const ps=mmToCanvas(pMm.x,pMm.y);
+        let tMm=canvasToMm(x,y);
+        // Shift 누르면 수직/수평 스냅
+        if(e.shiftKey){
+            if(Math.abs(tMm.x-pMm.x)>=Math.abs(tMm.y-pMm.y)) tMm.y=pMm.y;
+            else tMm.x=pMm.x;
+        }
+        // 끝점 스냅
+        tMm=snapToEndpoint(tMm);
+        const ts=mmToCanvas(tMm.x,tMm.y);
+        // 스냅 표시 (스냅되었으면 십자 표시)
+        const snapped=snapToEndpoint(canvasToMm(x,y));
+        if(dimSnap && (snapped.x!==canvasToMm(x,y).x || snapped.y!==canvasToMm(x,y).y)){
+            const ss=mmToCanvas(snapped.x,snapped.y);
+            ctx.strokeStyle='#1976d2';ctx.lineWidth=1;
+            ctx.beginPath();ctx.moveTo(ss.x-10,ss.y);ctx.lineTo(ss.x+10,ss.y);ctx.stroke();
+            ctx.beginPath();ctx.moveTo(ss.x,ss.y-10);ctx.lineTo(ss.x,ss.y+10);ctx.stroke();
+        }
+        const distMm=Math.round(Math.sqrt((tMm.x-pMm.x)**2+(tMm.y-pMm.y)**2));
+        ctx.strokeStyle='#e65100';ctx.lineWidth=1.5;ctx.setLineDash([6,4]);
+        ctx.beginPath();ctx.moveTo(ps.x,ps.y);ctx.lineTo(ts.x,ts.y);ctx.stroke();ctx.setLineDash([]);
+        ctx.beginPath();ctx.arc(ps.x,ps.y,5,0,Math.PI*2);ctx.fillStyle='#e65100';ctx.fill();
+        ctx.beginPath();ctx.arc(ts.x,ts.y,5,0,Math.PI*2);ctx.fillStyle='#e65100';ctx.fill();
+        ctx.font='bold 14px sans-serif';ctx.fillStyle='#e65100';ctx.textAlign='center';ctx.textBaseline='bottom';
+        ctx.fillText(`${distMm}mm`,(ps.x+ts.x)/2,(ps.y+ts.y)/2-10);
+        dimSnapTarget=tMm; // mm 좌표로 저장
+        return;
+    }
+    if(bgDragging&&getSelectedBg()){
+        const dx=(x-bgDragStartX)/planScale, dy=(y-bgDragStartY)/planScale;
+        if(bgCrossGrouped){
+            // 전체 묶기: X는 모든 뷰 공유, Y는 현재 뷰만 + 다른 뷰의 3D dist 연동
+            const curKey=bgKey();
+            bgDragCrossData.forEach(d=>{
+                d.bg.offX=d.offX+dx; // X축은 모든 뷰 공유
+                if(d.view.startsWith(planView)) d.bg.offY=d.offY+dy; // 같은 뷰의 모든 회전
+            });
+            // 다른 뷰 키들의 dist 연동
+            for(const k in bgDragOrigDist){
+                if(!k.startsWith(planView)) bg3dDist[k]=bgDragOrigDist[k]-dy;
+            }
+            document.getElementById('bg3d-dist').value=getBg3dDist();
+        } else if(isBgGrouped()){
+            getBgList().forEach((bg,i)=>{
+                bg.offX=bgDragOrigOffsets[i].offX+dx;
+                bg.offY=bgDragOrigOffsets[i].offY+dy;
+            });
+        } else {
+            const selBg=getSelectedBg();
+            selBg.offX=bgOrigOffX+dx;
+            selBg.offY=bgOrigOffY+dy;
+        }
+        drawPlan();return;
+    }
+    if(planPanning){planPanX=planPanOrigX-(x-planPanStartX)/planScale;planPanY=planPanOrigY-(y-planPanStartY)/planScale;drawPlan();return;}
+    if(planMoveDragging){const dx=(x-planMoveStartX)/planScale,dy=(y-planMoveStartY)/planScale,w=unproject2D(dx,dy),sw=getSelectedWire();if(!sw)return;sw.startPos={x:Math.round(planMoveOrigX+w.x),y:Math.round(planMoveOrigY+w.y),z:Math.round(planMoveOrigZ+w.z)};document.getElementById('start-x').value=sw.startPos.x;document.getElementById('start-y').value=sw.startPos.y;document.getElementById('start-z').value=sw.startPos.z;render3D();drawPlan();return;}
+    if(cadMode&&planScreenPts.length){cadMouseX=x;cadMouseY=y;const ep=planScreenPts[planScreenPts.length-1],dx=x-ep.x,dy=y-ep.y;if(Math.abs(dx)>=Math.abs(dy)){cadSnapDir='h';cadSnapDx=dx>0?1:-1;cadSnapDy=0;}else{cadSnapDir='v';cadSnapDx=0;cadSnapDy=dy>0?1:-1;}document.getElementById('cad-dir-label').textContent=getCadDirLabel();drawPlan();drawCadPreview();return;}
+    planCanvas.style.cursor=moveMode?'move':nearEnd(x,y)?'pointer':hitSegment(x,y)>=0?'pointer':'default';
+});
+planCanvas.addEventListener('mouseup',()=>{if(bgDragging) updateBg3D(); planMoveDragging=false;planPanning=false;bgDragging=false;dimDragging=false;});
+planCanvas.addEventListener('mouseleave',()=>{if(bgDragging) updateBg3D(); planMoveDragging=false;planPanning=false;bgDragging=false;});
+
+function drawCadPreview(){
+    if(!cadMode||!planScreenPts.length||!cadSnapDir)return;const ctx=planCtx,ep=planScreenPts[planScreenPts.length-1];
+    const len=parseFloat(document.getElementById('cad-length').value)||0;
+    const dx=cadMouseX-ep.x,dy=cadMouseY-ep.y,mDist=cadSnapDir==='h'?Math.abs(dx):Math.abs(dy),mMm=Math.round(mDist/planScale);
+    const pLen=len>0?len*planScale:mDist,tx=ep.x+cadSnapDx*pLen,ty=ep.y+cadSnapDy*pLen;
+    ctx.setLineDash([4,4]);ctx.strokeStyle='#ccc';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(ep.x+cadSnapDx*-2000,ep.y+cadSnapDy*-2000);ctx.lineTo(ep.x+cadSnapDx*2000,ep.y+cadSnapDy*2000);ctx.stroke();ctx.setLineDash([]);
+    ctx.setLineDash([8,5]);ctx.strokeStyle='#4caf50';ctx.lineWidth=4;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(ep.x,ep.y);ctx.lineTo(tx,ty);ctx.stroke();ctx.setLineDash([]);
+    ctx.beginPath();ctx.arc(tx,ty,6,0,Math.PI*2);ctx.fillStyle='#4caf50';ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+    const dLen=len>0?len:mMm,isV=cadSnapDir==='v';ctx.font='bold 15px sans-serif';ctx.fillStyle='#4caf50';
+    if(isV){ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(`${dLen}mm`,(ep.x+tx)/2+12,(ep.y+ty)/2);}
+    else{ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(`${dLen}mm`,(ep.x+tx)/2,(ep.y+ty)/2-10);}
+}
+document.getElementById('cad-length').addEventListener('input',()=>{drawPlan();drawCadPreview();});
+
+// ============================================================
+//  MISC
+// ============================================================
+function resetView(){camera.position.set(300,200,300);camera.up.set(0,1,0);orbitControls.target.set(0,0,0);orbitControls.update();}
+function applyEditPopup(){
+    const val=parseFloat(document.getElementById('edit-popup-input').value);
+    if(!val||val<=0){closeEditPopup();return;}
+    const sw=getSelectedWire();if(!sw){closeEditPopup();return;}
+    saveState();
+    if(editSegIdx===0) sw.startLength=Math.round(val);
+    else if(editSegIdx>=1&&sw.bends[editSegIdx-1]) sw.bends[editSegIdx-1].length=Math.round(val);
+    loadWireToSidebar(sw);updateAll();closeEditPopup();
+}
+function closeEditPopup(){document.getElementById('edit-popup').style.display='none';editSegIdx=-2;}
+document.getElementById('edit-popup-input').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();applyEditPopup();}if(e.key==='Escape'){e.preventDefault();closeEditPopup();}});
+async function exportData(){
+    saveSidebarToWire();
+    const blob=new Blob([JSON.stringify({wires},null,2)],{type:'application/json'});
+    if(window.showSaveFilePicker){
+        try{
+            const handle=await showSaveFilePicker({suggestedName:'wire-bending-data.json',types:[{description:'JSON',accept:{'application/json':['.json']}}]});
+            const w=await handle.createWritable(); await w.write(blob); await w.close(); return;
+        }catch(e){ if(e.name==='AbortError') return; }
+    }
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='wire-bending-data.json';a.click();
+}
+
+function imgToDataURL(img){
+    const c=document.createElement('canvas'); c.width=img.width; c.height=img.height;
+    c.getContext('2d').drawImage(img,0,0); return c.toDataURL('image/png');
+}
+
+async function saveProject(){
+    saveSidebarToWire();
+    // 배경 이미지를 dataURL로 변환
+    const bgData={};
+    for(const view in bgImages){
+        const list=bgImages[view];
+        bgData[view]=list.map(bg=>({
+            imgData: imgToDataURL(bg.imgOriginal||bg.img),
+            mmPerImgPx: bg.mmPerImgPx,
+            offX: bg.offX, offY: bg.offY,
+            opacity: bg.opacity!=null?bg.opacity:0.25,
+            whiteTransparent: !!bg.whiteTransparent
+        }));
+    }
+    const project={
+        version: 3,
+        wires,
+        selectedWireId,
+        wireIdCounter,
+        bgData,
+        bgGrouped: JSON.parse(JSON.stringify(bgGrouped)),
+        bgCrossGrouped,
+        dimResults,
+        planView, planRotation, planZoom, planPanX, planPanY,
+        selectedBgIdx,
+        bg3dDist: JSON.parse(JSON.stringify(bg3dDist)),
+        bg3dCheck: document.getElementById('bg3d-check').checked
+    };
+    const blob=new Blob([JSON.stringify(project)],{type:'application/json'});
+    if(window.showSaveFilePicker){
+        try{
+            const handle=await showSaveFilePicker({suggestedName:'project.bend',types:[{description:'벤딩 프로젝트',accept:{'application/json':['.bend']}}]});
+            const w=await handle.createWritable(); await w.write(blob); await w.close(); return;
+        }catch(e){ if(e.name==='AbortError') return; }
+    }
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='project.bend';a.click();
+}
+
+function loadProject(){
+    const input=document.createElement('input');input.type='file';input.accept='.bend,.json';
+    input.onchange=e=>{
+        const reader=new FileReader();
+        reader.onload=ev=>{
+            try{
+                const d=JSON.parse(ev.target.result);
+                if(d.version>=2 || d.bgData){
+                    // 프로젝트 파일
+                    wires=migrateWireData(d.wires||[]);
+                    wireIdCounter=d.wireIdCounter!=null?d.wireIdCounter:Math.max(...wires.map(w=>w.id),0);
+                    selectedWireId=d.selectedWireId||null;
+                    dimResults=d.dimResults||[];
+                    // bgGrouped 키 호환성 마이그레이션
+                    const rawGrouped=d.bgGrouped||{};
+                    bgGrouped={};
+                    for(const gk in rawGrouped){
+                        bgGrouped[gk.includes('_')?gk:gk+'_0']=rawGrouped[gk];
+                    }
+                    bgCrossGrouped=!!d.bgCrossGrouped;
+                    selectedBgIdx=d.selectedBgIdx||0;
+                    if(d.bg3dDist){
+                        bg3dDist={};
+                        for(const dk in d.bg3dDist){
+                            bg3dDist[dk.includes('_')?dk:dk+'_0']=d.bg3dDist[dk];
+                        }
+                    }
+                    if(d.planView) planView=d.planView;
+                    if(d.planRotation!=null) planRotation=d.planRotation;
+                    if(d.planZoom!=null) planZoom=d.planZoom;
+                    if(d.planPanX!=null) planPanX=d.planPanX;
+                    if(d.planPanY!=null) planPanY=d.planPanY;
+                    planZoomInited=true;
+                    if(d.bg3dCheck!=null) document.getElementById('bg3d-check').checked=d.bg3dCheck;
+                    // 배경 이미지 복원
+                    bgImages={};
+                    const bgData=d.bgData||{};
+                    let pending=0;
+                    for(const rawKey in bgData){
+                        // 호환성: 기존 'front','top' → 'front_0','top_0'
+                        const view = rawKey.includes('_') ? rawKey : rawKey+'_0';
+                        bgImages[view]=[];
+                        bgData[rawKey].forEach((bd,i)=>{
+                            pending++;
+                            const img=new Image();
+                            img.onload=()=>{
+                                const entry={img, imgOriginal:img, mmPerImgPx:bd.mmPerImgPx, offX:bd.offX, offY:bd.offY, opacity:bd.opacity!=null?bd.opacity:0.25};
+                                bgImages[view][i]=entry;
+                                // 항상 흰색 투명 적용
+                                const converted=makeWhiteTransparent(img);
+                                converted.onload=()=>{
+                                    entry.img=converted;
+                                    pending--;
+                                    if(pending<=0) finishLoad();
+                                };
+                            };
+                            img.onerror=()=>{ pending--; if(pending<=0) finishLoad(); };
+                            img.src=bd.imgData;
+                        });
+                    }
+                    function finishLoad(){
+                        selectedWireId=null; // 이전 상태 간섭 방지
+                        document.getElementById('bend-list').innerHTML=''; bendCount=0;
+                        if(wires.length) selectWire(wires[0].id);
+                        else{ renderWireList(); }
+                        setPlanView(planView);
+                        updateBgNav(); updateAll();
+                    }
+                    if(pending===0) finishLoad();
+                } else if(d.wires){
+                    // 기존 전선 데이터만
+                    wires=migrateWireData(d.wires);
+                    wireIdCounter=Math.max(...wires.map(w=>w.id),0);
+                    selectedWireId=null;
+                    document.getElementById('bend-list').innerHTML=''; bendCount=0;
+                    if(wires.length) selectWire(wires[0].id);
+                    renderWireList(); updateAll();
+                }
+            }catch(err){alert('오류:'+err.message);}
+        };
+        reader.readAsText(e.target.files[0]);
+    };
+    input.click();
+}
+function migrateWireData(wires){
+    wires.forEach(w=>{
+        if(w.visible===undefined) w.visible=true;
+        if(!w.initialDir) w.initialDir={x:0,y:0,z:1};
+        // 이미 새 형식이면 스킵
+        if(w.bends.length>0 && w.bends[0].axis) return;
+
+        // 기존 로컬 direction+angle → 절대 axis 변환 (경로 시뮬레이션)
+        const iDir=new THREE.Vector3(w.initialDir.x,w.initialDir.y,w.initialDir.z).normalize();
+        let d=iDir.clone(), u=new THREE.Vector3(0,1,0);
+        if(Math.abs(d.dot(u))>0.99) u=new THREE.Vector3(0,0,1);
+
+        function oldGetBendAxis(dir,up,direction){
+            switch(direction){
+                case'up':return up.clone();
+                case'down':return up.clone().negate();
+                case'left':{const a=new THREE.Vector3().crossVectors(up,dir).normalize();return a.lengthSq()>0.01?a:new THREE.Vector3(1,0,0);}
+                case'right':{const a=new THREE.Vector3().crossVectors(dir,up).normalize();return a.lengthSq()>0.01?a:new THREE.Vector3(-1,0,0);}
+            }
+            return up.clone();
+        }
+
+        w.bends.forEach(b=>{
+            const angle=THREE.MathUtils.degToRad(b.angle||90);
+            const ax=oldGetBendAxis(d,u,b.direction||'up');
+            d=d.clone().applyAxisAngle(ax,angle).normalize();
+            u=u.clone().applyAxisAngle(ax,angle).normalize();
+            // d가 이제 이 벤딩 후 실제 3D 진행 방향
+            b.axis=vecToAxis(d);
+            delete b.angle; delete b.direction; delete b.actualAxis;
+        });
+    });
+    return wires;
+}
+function importData(){const input=document.createElement('input');input.type='file';input.accept='.json';input.onchange=e=>{const reader=new FileReader();reader.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.wires){wires=migrateWireData(d.wires);wireIdCounter=Math.max(...wires.map(w=>w.id),0);selectedWireId=null;document.getElementById('bend-list').innerHTML='';bendCount=0;if(wires.length)selectWire(wires[0].id);renderWireList();updateAll();}}catch(err){alert('오류:'+err.message);}};reader.readAsText(e.target.files[0]);};input.click();}
+
+function onResize(){
+    const c3d=document.getElementById('canvas-container');
+    if(c3d.clientWidth>0&&c3d.clientHeight>0){camera.aspect=c3d.clientWidth/c3d.clientHeight;camera.updateProjectionMatrix();renderer.setSize(c3d.clientWidth,c3d.clientHeight);}
+    drawPlan();
+}
+window.addEventListener('resize',onResize);
+function animate(){requestAnimationFrame(animate);orbitControls.update();renderer.render(scene,camera);}
+
+// INIT
+setViewMode('split');
+addWire();
+animate();
+</script>
+</body>
+</html>
