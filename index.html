@@ -105,6 +105,8 @@ body{font-family:'Segoe UI',sans-serif;display:flex;flex-direction:column;height
 #right-sidebar .btn-row{display:flex;gap:4px;flex-wrap:wrap;}
 #right-sidebar .btn-row .rbtn{flex:1;text-align:center;min-width:0;}
 .bg-no-image{color:#999;font-size:10px;text-align:center;padding:12px 4px;}
+#enc-section .rbtn.active{background:#4caf50;color:#fff;border-color:#4caf50;}
+#enc-section .rbtn:hover:not(.active){background:#e8f5e9;}
 </style>
 </head>
 <body>
@@ -117,6 +119,8 @@ body{font-family:'Segoe UI',sans-serif;display:flex;flex-direction:column;height
         <div class="menu-sep"></div>
         <div class="menu-item" onclick="exportData()">전선 데이터 내보내기</div>
         <div class="menu-item" onclick="importData()">전선 데이터 불러오기</div>
+        <div class="menu-sep"></div>
+        <div class="menu-item" onclick="loadEnclosure()">외함 3D 불러오기 (STL/OBJ)<span>Ctrl+E</span></div>
     </div></div>
     <div class="menu-group"><div class="menu-trigger" onclick="toggleMenu('edit-menu')">편집</div><div class="menu-dropdown" id="edit-menu">
         <div class="menu-item" onclick="undo()">실행 취소<span>Ctrl+Z</span></div>
@@ -267,12 +271,30 @@ body{font-family:'Segoe UI',sans-serif;display:flex;flex-direction:column;height
                 <span class="unit">mm</span>
             </div>
         </div>
+        <div class="section" id="enc-section">
+            <h2 style="color:#4caf50;">외함 3D 모델</h2>
+            <div id="enc-list" style="display:flex;flex-direction:column;gap:2px;max-height:120px;overflow-y:auto;"></div>
+            <div class="btn-row" style="margin-top:4px;">
+                <button class="rbtn" onclick="loadEnclosure()">+ 외함 추가</button>
+                <button class="rbtn" id="enc-remove-btn" onclick="removeEnclosure()" style="color:#d32f2f;">제거</button>
+            </div>
+            <div id="enc-controls" style="display:none;margin-top:6px;">
+                <div class="form-row"><label style="min-width:40px;">투명도</label><input type="range" id="enc-opacity" min="5" max="100" value="40" step="5" oninput="onEncOpacity(this.value)"><span id="enc-opacity-label" style="font-size:10px;color:#666;min-width:28px;text-align:right;">40%</span></div>
+                <div class="form-row"><label style="min-width:40px;">색상</label><input type="color" id="enc-color" value="#888888" class="color-input" oninput="onEncColor(this.value)"></div>
+                <div class="form-row"><label style="min-width:40px;">스케일</label><input type="number" id="enc-scale" value="1" min="0.001" step="0.1" onchange="onEncScale(this.value)" style="width:60px;"><select id="enc-unit" onchange="onEncUnitChange(this.value)" style="width:55px;font-size:10px;"><option value="mm">mm</option><option value="cm">cm</option><option value="inch">inch</option></select></div>
+                <div class="form-row"><label style="min-width:40px;">위치</label><input type="number" id="enc-pos-x" value="0" step="10" style="width:50px;" placeholder="X" onchange="onEncPosition()"><input type="number" id="enc-pos-y" value="0" step="10" style="width:50px;" placeholder="Y" onchange="onEncPosition()"><input type="number" id="enc-pos-z" value="0" step="10" style="width:50px;" placeholder="Z" onchange="onEncPosition()"></div>
+                <div class="form-row"><label style="min-width:40px;">회전</label><input type="number" id="enc-rot-x" value="0" step="15" style="width:50px;" placeholder="X" onchange="onEncRotation()"><input type="number" id="enc-rot-y" value="0" step="15" style="width:50px;" placeholder="Y" onchange="onEncRotation()"><input type="number" id="enc-rot-z" value="0" step="15" style="width:50px;" placeholder="Z" onchange="onEncRotation()"><span class="unit">deg</span></div>
+                <div class="btn-row" style="margin-top:4px;"><button class="rbtn" id="enc-wireframe-btn" onclick="toggleEncWireframe()">와이어프레임</button></div>
+            </div>
+        </div>
     </div>
 </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
 <script>
 // ============================================================
 //  VIEW MODE (2D / 3D / split)
@@ -381,6 +403,9 @@ const dl1=new THREE.DirectionalLight(0xffffff,0.8); dl1.position.set(200,300,200
 const dl2=new THREE.DirectionalLight(0x8888ff,0.3); dl2.position.set(-200,-100,-200); scene.add(dl2);
 scene.add(new THREE.GridHelper(1000,50,0x999999,0xcccccc)); scene.add(new THREE.AxesHelper(80));
 const wireGroup3D=new THREE.Group(); scene.add(wireGroup3D);
+let enclosureGroup=new THREE.Group(); scene.add(enclosureGroup);
+let loadedEnclosures=[]; // {name, mesh, visible, opacity, color, scale, position, rotation, arrayBuffer, wireframe}
+let selectedEnclosureIdx=-1;
 let camDist=400, moveMode=false;
 function toggleMoveMode() { moveMode=!moveMode; const btn=document.getElementById('move-toggle'); btn.textContent=moveMode?'이동 ON':'이동 (M)'; btn.classList.toggle('active',moveMode); }
 
@@ -428,6 +453,8 @@ function restoreBgState(saved){
 }
 function makeUndoEntry(){ saveSidebarToWire(); return {wires:JSON.parse(JSON.stringify(wires)),selectedWireId,bgMeta:saveBgState(),dimResults:JSON.parse(JSON.stringify(dimResults))}; }
 function saveState() { undoStack.push(makeUndoEntry()); if(undoStack.length>50) undoStack.shift(); redoStack=[]; }
+let _lastArrowSaveTime=0;
+function saveStateArrow(){ const now=Date.now(); if(now-_lastArrowSaveTime>500) saveState(); _lastArrowSaveTime=now; }
 function undo() { if(!undoStack.length) return; redoStack.push(makeUndoEntry()); restoreState(undoStack.pop()); }
 function redo() { if(!redoStack.length) return; undoStack.push(makeUndoEntry()); restoreState(redoStack.pop()); }
 function restoreState(s) { wires=s.wires; wireIdCounter=Math.max(...wires.map(w=>w.id),0); selectedWireId=s.selectedWireId; restoreBgState(s.bgMeta); if(s.dimResults) dimResults=s.dimResults; dimPoints=[]; const w=getSelectedWire(); if(w) loadWireToSidebar(w); renderWireList(); updateAll(); }
@@ -452,6 +479,7 @@ document.addEventListener('keydown', e => {
     if(c&&e.key==='z'&&!e.shiftKey){e.preventDefault();undo();} if(c&&(e.key==='y'||(e.key==='z'&&e.shiftKey))){e.preventDefault();redo();}
     if(c&&e.key==='n'){e.preventDefault();newProject();} if(c&&e.key==='s'){e.preventDefault();saveProject();} if(c&&e.key==='o'){e.preventDefault();loadProject();}
     if(c&&e.key==='w'){e.preventDefault();addWire();} if(c&&e.key==='d'){e.preventDefault();duplicateWire();}
+    if(c&&e.key==='e'){e.preventDefault();loadEnclosure();}
     // Cmd+C: 선택된 배경 이미지 복사
     if(c&&e.key==='c'&&!e.target.closest('input')&&getSelectedBg()&&!isBgGrouped()){
         e.preventDefault();
@@ -471,7 +499,7 @@ document.addEventListener('keydown', e => {
             let dx=0, dy=0;
             if(e.key==='ArrowLeft') dx=-step; if(e.key==='ArrowRight') dx=step;
             if(e.key==='ArrowUp') dy=-step; if(e.key==='ArrowDown') dy=step;
-            saveState();
+            saveStateArrow();
             if(bgCrossGrouped){
                 getAllBgImages().forEach(d=>{
                     d.bg.offX+=dx;
@@ -502,7 +530,7 @@ document.addEventListener('keydown', e => {
             if(e.key==='ArrowUp') dy=-step; if(e.key==='ArrowDown') dy=step;
             // 화면 방향 → 3D 좌표 변환
             const move3D=unproject2D(dx, dy);
-            saveState();
+            saveStateArrow();
             sw.startPos.x+=move3D.x; sw.startPos.y+=move3D.y; sw.startPos.z+=move3D.z;
             document.getElementById('start-x').value=sw.startPos.x;
             document.getElementById('start-y').value=sw.startPos.y;
@@ -637,6 +665,7 @@ function updateBg3D(){
         const dist = getBg3dDist(key);
         const rotRad = THREE.MathUtils.degToRad(rot);
 
+        if(view==='side') continue;
         list.forEach((bg, bgIdx) => {
             if(!bg || !bg.img) return;
 
@@ -660,11 +689,8 @@ function updateBg3D(){
             plane.renderOrder = globalIdx++;
 
             const zOff = bgIdx * 0.5;
-            // offX/offY는 2D 평면도 좌표 → unproject2D로 3D 변환
-            const oldView=planView, oldRot=planRotation;
-            planView=view; planRotation=rot;
-            const pos3D=unproject2D(bg.offX, bg.offY);
-            planView=oldView; planRotation=oldRot;
+            // offX/offY는 2D 평면도 좌표 → unproject2DFor로 3D 변환 (전역 상태 변경 없음)
+            const pos3D=unproject2DFor(bg.offX, bg.offY, view, rot);
             if(view === 'front'){
                 plane.rotation.y = rotRad;
                 const sin=Math.sin(rotRad), cos=Math.cos(rotRad);
@@ -725,7 +751,7 @@ const planCanvas=document.getElementById('plan-canvas'),planCtx=planCanvas.getCo
 let planView='front',planRotation=0,planZoom=2,planPanX=0,planPanY=0,planZoomInited=false;
 let planScreenPts=[],planScale=1,planMidX=0,planMidY=0,planCx=0,planCy=0;
 
-function _rotCS(){const r=THREE.MathUtils.degToRad(planRotation);return{c:Math.cos(r),s:Math.sin(r)};}
+function _rotCS(rot){const r=THREE.MathUtils.degToRad(rot!=null?rot:planRotation);return{c:Math.cos(r),s:Math.sin(r)};}
 // 2D ↔ 3D 변환: 3D 카메라와 동일한 투영
 // 정면: Y축 고정, 회전하면 X↔Z축이 전환
 // 상면: Y=0 평면에서 회전
@@ -740,6 +766,15 @@ function project2D(v){
 function unproject2D(px,py){
     const{c,s}=_rotCS();
     switch(planView){
+        case'front':return{x:px*c, y:-py, z:-px*s};
+        case'top':return{x:px*c+py*s, y:0, z:-px*s+py*c};
+        case'side':return{x:-px*s, y:-py, z:-px*c};
+    }
+    return {x:px, y:0, z:-py};
+}
+function unproject2DFor(px,py,view,rot){
+    const{c,s}=_rotCS(rot);
+    switch(view){
         case'front':return{x:px*c, y:-py, z:-px*s};
         case'top':return{x:px*c+py*s, y:0, z:-px*s+py*c};
         case'side':return{x:-px*s, y:-py, z:-px*c};
@@ -907,7 +942,6 @@ function updateBgNav(){
     // --- 우측 사이드바 업데이트 ---
     // 썸네일 목록
     const thumbList=document.getElementById('bg-thumb-list');
-    const noMsg=document.getElementById('bg-no-image-msg');
     if(thumbList){
         thumbList.innerHTML='';
         if(!has){
@@ -1016,7 +1050,6 @@ document.addEventListener('paste', e => {
         const newBg={img:bgClipboard.img, imgOriginal:bgClipboard.imgOriginal, mmPerImgPx:bgClipboard.mmPerImgPx, offX:planPanX, offY:planPanY, opacity:bgClipboard.opacity};
         bgImages[k].push(newBg);
         selectedBgIdx=bgImages[k].length-1;
-        bgClipboard=null;
         updateBgNav(); drawPlan(); updateBg3D();
         return;
     }
@@ -1229,7 +1262,7 @@ function rotateBgImage(){
             rotateImg(srcDisp, newDisp=>{
                 b.img=newDisp;
                 pending--;
-                if(pending<=0){ drawPlan(); updateBg3D(); }
+                if(pending<=0){ updateBgNav(); drawPlan(); updateBg3D(); }
             });
         });
     });
@@ -1852,6 +1885,21 @@ async function saveProject(){
             whiteTransparent: !!bg.whiteTransparent
         }));
     }
+    // 외함 데이터 저장 (arrayBuffer를 base64로)
+    const encData=loadedEnclosures.map(enc=>{
+        let ab64=null;
+        if(enc.arrayBuffer && enc.arrayBuffer.byteLength < 5*1024*1024){
+            const bytes=new Uint8Array(enc.arrayBuffer);
+            let binary='';for(let i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);
+            ab64=btoa(binary);
+        }
+        return {
+            name:enc.name, visible:enc.visible, opacity:enc.opacity, color:enc.color,
+            scale:enc.scale, position:{x:enc.position.x,y:enc.position.y,z:enc.position.z},
+            rotation:{x:enc.rotation.x,y:enc.rotation.y,z:enc.rotation.z},
+            wireframe:!!enc.wireframe, arrayBuffer64:ab64
+        };
+    });
     const project={
         version: 3,
         wires,
@@ -1864,7 +1912,8 @@ async function saveProject(){
         planView, planRotation, planZoom, planPanX, planPanY,
         selectedBgIdx,
         bg3dDist: JSON.parse(JSON.stringify(bg3dDist)),
-        bg3dCheck: document.getElementById('bg3d-check').checked
+        bg3dCheck: document.getElementById('bg3d-check').checked,
+        enclosures: encData
     };
     const blob=new Blob([JSON.stringify(project)],{type:'application/json'});
     if(window.showSaveFilePicker){
@@ -1932,17 +1981,46 @@ function loadProject(){
                                     if(pending<=0) finishLoad();
                                 };
                             };
-                            img.onerror=()=>{ pending--; if(pending<=0) finishLoad(); };
+                            img.onerror=()=>{ bgImages[view][i]=null; pending--; if(pending<=0) finishLoad(); };
                             img.src=bd.imgData;
                         });
                     }
                     function finishLoad(){
+                        // sparse array 정리: null 항목 제거
+                        for(const vk in bgImages){ bgImages[vk]=bgImages[vk].filter(x=>x!=null); if(bgImages[vk].length===0) delete bgImages[vk]; }
                         selectedWireId=null; // 이전 상태 간섭 방지
                         document.getElementById('bend-list').innerHTML=''; bendCount=0;
                         if(wires.length) selectWire(wires[0].id);
                         else{ renderWireList(); }
                         setPlanView(planView);
                         updateBgNav(); updateAll();
+                        // 외함 복원
+                        clearAllEnclosures();
+                        if(d.enclosures && d.enclosures.length){
+                            d.enclosures.forEach(ed=>{
+                                if(!ed.arrayBuffer64) return;
+                                try{
+                                    const binary=atob(ed.arrayBuffer64);
+                                    const bytes=new Uint8Array(binary.length);
+                                    for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+                                    const ab=bytes.buffer;
+                                    const loader=new THREE.STLLoader();
+                                    const geom=loader.parse(ab);
+                                    geom.center();
+                                    const mat=new THREE.MeshPhongMaterial({color:ed.color||'#888888',transparent:true,opacity:ed.opacity!=null?ed.opacity:0.4,side:THREE.DoubleSide,depthWrite:false});
+                                    const mesh=new THREE.Mesh(geom,mat);
+                                    const s=ed.scale||1; mesh.scale.set(s,s,s);
+                                    if(ed.position){mesh.position.set(ed.position.x||0,ed.position.y||0,ed.position.z||0);}
+                                    if(ed.rotation){mesh.rotation.set(ed.rotation.x||0,ed.rotation.y||0,ed.rotation.z||0);}
+                                    if(ed.wireframe) mat.wireframe=true;
+                                    enclosureGroup.add(mesh);
+                                    loadedEnclosures.push({name:ed.name,mesh,visible:ed.visible!==false,opacity:ed.opacity!=null?ed.opacity:0.4,color:ed.color||'#888888',scale:s,position:{x:ed.position?.x||0,y:ed.position?.y||0,z:ed.position?.z||0},rotation:{x:ed.rotation?.x||0,y:ed.rotation?.y||0,z:ed.rotation?.z||0},arrayBuffer:ab,wireframe:!!ed.wireframe});
+                                    mesh.visible=ed.visible!==false;
+                                }catch(err){console.warn('외함 복원 오류:',err);}
+                            });
+                            selectedEnclosureIdx=loadedEnclosures.length>0?0:-1;
+                            updateEnclosureUI();
+                        }
                     }
                     if(pending===0) finishLoad();
                 } else if(d.wires){
@@ -1995,6 +2073,190 @@ function migrateWireData(wires){
     return wires;
 }
 function importData(){const input=document.createElement('input');input.type='file';input.accept='.json';input.onchange=e=>{const reader=new FileReader();reader.onload=ev=>{try{const d=JSON.parse(ev.target.result);if(d.wires){wires=migrateWireData(d.wires);wireIdCounter=Math.max(...wires.map(w=>w.id),0);selectedWireId=null;document.getElementById('bend-list').innerHTML='';bendCount=0;if(wires.length)selectWire(wires[0].id);renderWireList();updateAll();}}catch(err){alert('오류:'+err.message);}};reader.readAsText(e.target.files[0]);};input.click();}
+
+// ============================================================
+//  외함 3D 모델 (STL/OBJ) 관리
+// ============================================================
+function loadEnclosure(){
+    const input=document.createElement('input');input.type='file';input.accept='.stl,.obj';
+    input.onchange=e=>{
+        const file=e.target.files[0]; if(!file) return;
+        if(file.size>10*1024*1024){ alert('경고: 파일 크기가 10MB를 초과합니다. 로딩이 느릴 수 있습니다.'); }
+        const ext=file.name.split('.').pop().toLowerCase();
+        if(ext==='stl'){
+            const reader=new FileReader();
+            reader.onload=ev=>{
+                const ab=ev.target.result;
+                const loader=new THREE.STLLoader();
+                const geom=loader.parse(ab);
+                geom.center();
+                addEnclosureMesh(file.name,geom,ab);
+            };
+            reader.readAsArrayBuffer(file);
+        } else if(ext==='obj'){
+            const reader=new FileReader();
+            reader.onload=ev=>{
+                const text=ev.target.result;
+                const loader=new THREE.OBJLoader();
+                const obj=loader.parse(text);
+                // OBJ는 그룹일 수 있으므로 첫 번째 메쉬의 geometry 사용, 또는 병합
+                let geom=null;
+                obj.traverse(child=>{
+                    if(child.isMesh && !geom) geom=child.geometry;
+                });
+                if(!geom){alert('OBJ 파일에서 메쉬를 찾을 수 없습니다.');return;}
+                geom.center();
+                // OBJ는 text를 ArrayBuffer로 변환하여 저장
+                const encoder=new TextEncoder();
+                const ab=encoder.encode(text).buffer;
+                addEnclosureMesh(file.name,geom,ab);
+            };
+            reader.readAsText(file);
+        } else { alert('STL 또는 OBJ 파일만 지원합니다.'); }
+    };
+    input.click();
+}
+
+function addEnclosureMesh(name,geom,arrayBuffer){
+    const mat=new THREE.MeshPhongMaterial({color:'#888888',transparent:true,opacity:0.4,side:THREE.DoubleSide,depthWrite:false});
+    const mesh=new THREE.Mesh(geom,mat);
+    enclosureGroup.add(mesh);
+    const enc={name,mesh,visible:true,opacity:0.4,color:'#888888',scale:1,position:{x:0,y:0,z:0},rotation:{x:0,y:0,z:0},arrayBuffer,wireframe:false};
+    loadedEnclosures.push(enc);
+    selectedEnclosureIdx=loadedEnclosures.length-1;
+    updateEnclosureUI();
+}
+
+function clearAllEnclosures(){
+    while(enclosureGroup.children.length){
+        const c=enclosureGroup.children[0];
+        c.traverse(x=>{if(x.geometry)x.geometry.dispose();if(x.material)x.material.dispose();});
+        enclosureGroup.remove(c);
+    }
+    loadedEnclosures=[];
+    selectedEnclosureIdx=-1;
+}
+
+function selectEnclosure(idx){
+    selectedEnclosureIdx=idx;
+    updateEnclosureUI();
+}
+
+function removeEnclosure(){
+    if(selectedEnclosureIdx<0||selectedEnclosureIdx>=loadedEnclosures.length) return;
+    const enc=loadedEnclosures[selectedEnclosureIdx];
+    enc.mesh.traverse(x=>{if(x.geometry)x.geometry.dispose();if(x.material)x.material.dispose();});
+    enclosureGroup.remove(enc.mesh);
+    loadedEnclosures.splice(selectedEnclosureIdx,1);
+    if(selectedEnclosureIdx>=loadedEnclosures.length) selectedEnclosureIdx=loadedEnclosures.length-1;
+    updateEnclosureUI();
+}
+
+function toggleEncVisible(idx){
+    if(idx<0||idx>=loadedEnclosures.length) return;
+    const enc=loadedEnclosures[idx];
+    enc.visible=!enc.visible;
+    enc.mesh.visible=enc.visible;
+    updateEnclosureUI();
+}
+
+function onEncOpacity(val){
+    if(selectedEnclosureIdx<0) return;
+    const enc=loadedEnclosures[selectedEnclosureIdx];
+    enc.opacity=parseInt(val)/100;
+    enc.mesh.material.opacity=enc.opacity;
+    document.getElementById('enc-opacity-label').textContent=val+'%';
+}
+
+function onEncColor(val){
+    if(selectedEnclosureIdx<0) return;
+    const enc=loadedEnclosures[selectedEnclosureIdx];
+    enc.color=val;
+    enc.mesh.material.color.set(val);
+}
+
+function onEncScale(val){
+    if(selectedEnclosureIdx<0) return;
+    const s=parseFloat(val)||1;
+    const enc=loadedEnclosures[selectedEnclosureIdx];
+    enc.scale=s;
+    enc.mesh.scale.set(s,s,s);
+}
+
+function onEncUnitChange(val){
+    if(selectedEnclosureIdx<0) return;
+    let s=1;
+    if(val==='cm') s=10;
+    else if(val==='inch') s=25.4;
+    document.getElementById('enc-scale').value=s;
+    onEncScale(s);
+}
+
+function onEncPosition(){
+    if(selectedEnclosureIdx<0) return;
+    const enc=loadedEnclosures[selectedEnclosureIdx];
+    const x=parseFloat(document.getElementById('enc-pos-x').value)||0;
+    const y=parseFloat(document.getElementById('enc-pos-y').value)||0;
+    const z=parseFloat(document.getElementById('enc-pos-z').value)||0;
+    enc.position={x,y,z};
+    enc.mesh.position.set(x,y,z);
+}
+
+function onEncRotation(){
+    if(selectedEnclosureIdx<0) return;
+    const enc=loadedEnclosures[selectedEnclosureIdx];
+    const rx=THREE.MathUtils.degToRad(parseFloat(document.getElementById('enc-rot-x').value)||0);
+    const ry=THREE.MathUtils.degToRad(parseFloat(document.getElementById('enc-rot-y').value)||0);
+    const rz=THREE.MathUtils.degToRad(parseFloat(document.getElementById('enc-rot-z').value)||0);
+    enc.rotation={x:rx,y:ry,z:rz};
+    enc.mesh.rotation.set(rx,ry,rz);
+}
+
+function toggleEncWireframe(){
+    if(selectedEnclosureIdx<0) return;
+    const enc=loadedEnclosures[selectedEnclosureIdx];
+    enc.wireframe=!enc.wireframe;
+    enc.mesh.material.wireframe=enc.wireframe;
+    document.getElementById('enc-wireframe-btn').classList.toggle('active',enc.wireframe);
+}
+
+function updateEnclosureUI(){
+    const listEl=document.getElementById('enc-list');
+    const ctrlEl=document.getElementById('enc-controls');
+    listEl.innerHTML='';
+    if(loadedEnclosures.length===0){
+        listEl.innerHTML='<div style="color:#999;font-size:10px;text-align:center;padding:8px;">외함 없음</div>';
+        ctrlEl.style.display='none';
+        return;
+    }
+    loadedEnclosures.forEach((enc,i)=>{
+        const item=document.createElement('div');
+        item.style.cssText='display:flex;align-items:center;gap:4px;padding:3px 5px;border-radius:4px;border:2px solid '+(i===selectedEnclosureIdx?'#4caf50':'transparent')+';cursor:pointer;background:'+(i===selectedEnclosureIdx?'#e8f5e9':'#fff')+';font-size:10px;';
+        item.innerHTML=
+            '<input type="checkbox" '+(enc.visible?'checked':'')+' onclick="event.stopPropagation();toggleEncVisible('+i+')" style="margin:0;">'+
+            '<span style="flex:1;font-weight:bold;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onclick="selectEnclosure('+i+')">'+enc.name+'</span>'+
+            '<button onclick="event.stopPropagation();selectedEnclosureIdx='+i+';removeEnclosure();" style="background:none;border:none;color:#d32f2f;cursor:pointer;font-size:12px;padding:0 2px;">✕</button>';
+        item.onclick=()=>selectEnclosure(i);
+        listEl.appendChild(item);
+    });
+    if(selectedEnclosureIdx>=0 && selectedEnclosureIdx<loadedEnclosures.length){
+        ctrlEl.style.display='';
+        const enc=loadedEnclosures[selectedEnclosureIdx];
+        document.getElementById('enc-opacity').value=Math.round(enc.opacity*100);
+        document.getElementById('enc-opacity-label').textContent=Math.round(enc.opacity*100)+'%';
+        document.getElementById('enc-color').value=enc.color;
+        document.getElementById('enc-scale').value=enc.scale;
+        document.getElementById('enc-pos-x').value=enc.position.x;
+        document.getElementById('enc-pos-y').value=enc.position.y;
+        document.getElementById('enc-pos-z').value=enc.position.z;
+        document.getElementById('enc-rot-x').value=Math.round(THREE.MathUtils.radToDeg(enc.rotation.x));
+        document.getElementById('enc-rot-y').value=Math.round(THREE.MathUtils.radToDeg(enc.rotation.y));
+        document.getElementById('enc-rot-z').value=Math.round(THREE.MathUtils.radToDeg(enc.rotation.z));
+        document.getElementById('enc-wireframe-btn').classList.toggle('active',enc.wireframe);
+    } else {
+        ctrlEl.style.display='none';
+    }
+}
 
 function onResize(){
     const c3d=document.getElementById('canvas-container');
